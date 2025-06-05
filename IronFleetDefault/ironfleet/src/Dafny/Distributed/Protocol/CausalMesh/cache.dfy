@@ -1,0 +1,476 @@
+include "../../Common/Collections/Maps.i.dfy"
+include "types.dfy"
+include "message.dfy"
+
+module CausalMesh_Cache_i {
+    import opened Collections__Maps_i
+    import opened CausalMesh_Types_i
+    import opened CausalMesh_Message_i
+
+    function Circle(id:int, nodes:int) : (i:int)
+        requires 0 <= id < nodes
+        ensures 0 <= i < nodes
+    {
+        if nodes == 1 then 
+            id
+        else if id == nodes - 1 then
+            0
+        else
+            id + 1
+    }
+
+    function GetDeps(icache:ICache, deps:Dependency, todos:set<(Key, VectorClock)>, domain:set<Key>) : (res:set<(Key, VectorClock)>)
+        // requires ICacheValid(icache)
+        requires forall k :: k in icache ==> k in Keys_domain && (forall m :: m in icache[k] ==> MetaValid(m) && m.key == k
+                    && (forall kk :: kk in m.deps ==> kk in domain && kk in Keys_domain))
+        requires DependencyValid(deps)
+        requires forall k :: k in icache ==> k in domain
+        requires forall k :: k in deps ==> k in domain
+        requires forall kv :: kv in todos ==> kv.0 in domain && kv.0 in Keys_domain
+        // requires forall k :: k in deps ==> k in icache
+        requires forall kv :: kv in todos ==> VectorClockValid(kv.1) // && kv.0 in icache
+        ensures forall kv :: kv in res ==> VectorClockValid(kv.1) && kv.0 in domain && kv.0 in Keys_domain
+        decreases |icache|, |deps| 
+    {
+        if |deps| == 0 then 
+            todos
+        else 
+            var k :| k in deps;
+            var new_deps := RemoveElt(deps, k);
+            assert |new_deps| < |deps|;
+            if (k, deps[k]) in todos then
+                GetDeps(icache, new_deps, todos, domain)
+            else if !(k in icache) then // why?
+                GetDeps(icache, new_deps, todos, domain)
+            else if exists m :: m in icache[k] && VCEq(m.vc, deps[k]) then 
+                var m :| m in icache[k] && VCEq(m.vc, deps[k]);
+                var new_cache := RemoveElt(icache, k); // is this right?
+                assert |new_cache| < |icache|;
+                var updatedTodos := todos + {(k, deps[k])};
+                var recursive := GetDeps(new_cache, m.deps, updatedTodos, domain);
+                GetDeps(icache, new_deps, recursive, domain)
+            else
+                GetDeps(icache, new_deps, todos + {(k, deps[k])}, domain)
+    }
+
+    function MergeTodos(todos:set<(Key, VectorClock)>, deps:Dependency) : (res:Dependency)
+        requires forall kv :: kv in todos ==> VectorClockValid(kv.1) && kv.0 in Keys_domain
+        requires DependencyValid(deps)
+        ensures DependencyValid(res)
+        ensures forall k :: k in res ==> (exists kv :: kv in todos && kv.0 == k) || (exists k2 :: k2 in deps && k2 == k)
+        decreases |todos|
+    {
+        if |todos| == 0 then 
+            deps
+        else
+            var todo :| todo in todos;
+            var key := todo.0;
+            var vc := todo.1;
+            if key in deps then 
+                var new_deps := deps[key := VCMerge(deps[key], vc)];
+                MergeTodos(todos - {todo}, new_deps)
+            else 
+                var new_deps := deps[key := vc];
+                MergeTodos(todos - {todo}, new_deps)
+    } 
+
+    function RemoveNotLarger(bk:set<Meta>, vc:VectorClock, bk_res:set<Meta>, res:Meta, domain:set<Key>) : (r:(set<Meta>, Meta))
+        requires forall m :: m in bk ==> MetaValid(m) && m.key == res.key && (forall kk :: kk in m.deps ==> kk in domain)
+        requires VectorClockValid(vc)
+        requires forall m :: m in bk_res ==> MetaValid(m) && m.key == res.key && (forall kk :: kk in m.deps ==> kk in domain)
+        requires MetaValid(res)
+        // ensures var r := RemoveNotLarger(bk, vc, bk_res, res);
+        ensures forall m :: m in r.0 ==> MetaValid(m) && m.key == res.key && (forall kk :: kk in m.deps ==> kk in domain)
+        ensures MetaValid(r.1)
+        ensures forall m :: m in bk ==> m.key == r.1.key
+        decreases |bk|
+    {
+        if |bk| == 0 then 
+            (bk_res, res)
+        else 
+            var m :| m in bk;
+            if VCHappendsBefore(m.vc, vc) || VCEq(m.vc, vc) then 
+                RemoveNotLarger(bk - {m}, vc, bk_res, MetaMerge(res, m), domain)
+            else 
+                RemoveNotLarger(bk - {m}, vc, bk_res + {m}, res, domain)
+    }
+
+    // function PullTodos(icache:ICache, ccache:CCache, todos:set<(Key, VectorClock)>) : (ICache, CCache)
+    //     requires ICacheValid(icache)
+    //     requires CCacheValid(ccache)
+    //     requires forall kv :: kv in todos ==> VectorClockValid(kv.1) && kv.0 in icache && kv.0 in ccache // is this true?
+    //     ensures var c := PullTodos(icache, ccache, todos);
+    //             && ICacheValid(c.0)
+    //             && CCacheValid(c.1)
+    //     decreases |todos|
+    // {
+    //     if |todos| == 0 then 
+    //         (icache, ccache)
+    //     else 
+    //         var kv :| kv in todos;
+    //         var vc := kv.1;
+    //         var k := kv.0;
+    //         var metas := icache[k];
+    //         var init := Meta(k, 0, EmptyVC(), map[]);
+    //         var pair := RemoveNotLarger(metas, vc, {}, init);
+    //         assert MetaValid(pair.1);
+    //         assert forall m :: m in metas ==> m.key == pair.1.key;
+    //         var updated_icache := icache[k := pair.0];
+    //         var updated_ccache := ccache[k := MetaMerge(ccache[k], pair.1)];
+    //         PullTodos(updated_icache, updated_ccache, todos - {kv})
+    // }
+
+    function PullTodos(icache:ICache, ccache:CCache, todos:Dependency) : (c:(ICache, CCache))
+        requires ICacheValid(icache)
+        requires CCacheValid(ccache)
+        requires DependencyValid(todos) 
+        requires forall k :: k in todos ==> k in icache 
+        // requires forall k :: k in todos ==> k in ccache // is this true?
+        // ensures var c := PullTodos(icache, ccache, todos);
+        ensures ICacheValid(c.0)
+        ensures CCacheValid(c.1)
+        // ensures forall k :: k in todos ==> k in c.0 && k in c.1
+        ensures forall k :: k in icache ==> k in c.0
+        ensures forall k :: k in ccache ==> k in c.1
+        decreases |todos|
+    {
+        if |todos| == 0 then 
+            (icache, ccache)
+        else 
+            var k :| k in todos;
+            var vc := todos[k];
+            var metas := icache[k];
+            var init := Meta(k, EmptyVC(), map[]);
+            var domain := icache.Keys;
+            var pair := RemoveNotLarger(metas, vc, {}, init, domain);
+            assert MetaValid(pair.1);
+            assert forall m :: m in metas ==> m.key == pair.1.key;
+            assert forall kv :: kv in pair.0 ==> forall kk :: kk in kv.deps ==> kk in icache;
+            var updated_icache := icache[k := pair.0];
+            // var updated_ccache := ccache[k := MetaMerge(ccache[k], pair.1)];
+            var updated_ccache := InsertIntoCCache(ccache, pair.1); // this is different with the TLA+ spec
+            PullTodos(updated_icache, updated_ccache, RemoveElt(todos, k))
+    }
+
+    function PullDeps(icache:ICache, ccache:CCache, deps:Dependency) : (c:(ICache, CCache))
+        requires ICacheValid(icache)
+        requires CCacheValid(ccache)
+        requires forall k :: k in ccache ==> k in icache
+        requires DependencyValid(deps)
+        requires forall k :: k in deps ==> k in icache && k in ccache
+        ensures ICacheValid(c.0)
+        ensures CCacheValid(c.1)
+    {
+        var domain := icache.Keys + deps.Keys;
+        var todos := GetDeps(icache, deps, {}, domain);
+        assert forall kv :: kv in todos ==> kv.0 in icache;
+        var merged := MergeTodos(todos, map[]);
+        assert forall k :: k in merged ==> exists kv :: kv in todos && kv.0 == k;
+        assert forall k :: k in merged ==> k in icache;
+        PullTodos(icache, ccache, merged)
+    }
+
+
+
+    function GetDeps2(icache:ICache, deps:Dependency, todos:Dependency, domain:set<Key>) : (res:Dependency)
+        requires forall k :: k in icache ==> k in Keys_domain && (forall m :: m in icache[k] ==> MetaValid(m) && m.key == k
+                    && (forall kk :: kk in m.deps ==> kk in domain && kk in Keys_domain))
+        requires DependencyValid(deps)
+        requires forall k :: k in icache ==> k in domain
+        requires forall k :: k in deps ==> k in domain
+        requires forall k :: k in todos ==> k in domain && k in Keys_domain && VectorClockValid(todos[k])
+        ensures DependencyValid(res)
+        ensures forall k :: k in res ==> k in domain
+        decreases |icache|, |deps|
+    {
+        if |deps| == 0 then 
+            todos 
+        else 
+            var k :| k in deps;
+            var new_deps := RemoveElt(deps, k);
+            if k in todos && (VCHappendsBefore(deps[k], todos[k]) || VCEq(deps[k], todos[k])) then 
+                GetDeps2(icache, new_deps, todos, domain)
+            else if !(k in icache) then 
+                GetDeps2(icache, new_deps, todos, domain)
+            else 
+                var metas := set m | m in icache[k] && (VCHappendsBefore(m.vc, deps[k]) || VCEq(m.vc, deps[k]));
+                var initial := EmptyMeta(k);
+                assert forall m :: m in metas ==> forall kk :: kk in m.deps ==> kk in domain;
+                var merged := FoldMetaSet(initial, metas, domain);
+                assert forall kk :: kk in merged.deps ==> kk in domain;
+                // var updaetd := GetDeps2(icache, merged.deps, )
+                var added1 := DependencyInsertOrMerge(todos, k, merged.vc);
+                var new_cache := RemoveElt(icache, k); // is this right?
+                var res := GetDeps2(new_cache, merged.deps, added1, domain);
+                var added2 := DependencyMerge(added1, res);
+                var final := DependencyInsertOrMerge(added2, k, merged.vc);
+                GetDeps2(icache, new_deps, final, domain)
+    }
+
+    function PullDeps2(icache:ICache, ccache:CCache, deps:Dependency) : (c:(ICache, CCache))
+        requires ICacheValid(icache)
+        requires CCacheValid(ccache)
+        requires forall k :: k in ccache ==> k in icache
+        requires DependencyValid(deps)
+        requires forall k :: k in deps ==> k in icache // && k in ccache
+        ensures ICacheValid(c.0)
+        ensures CCacheValid(c.1)
+        // ensures forall k :: k in deps ==> k in c.0 && k in c.1
+        ensures forall k :: k in icache ==> k in c.0
+        ensures forall k :: k in ccache ==> k in c.1
+    {
+        var domain := icache.Keys + deps.Keys;
+        var todos := GetDeps2(icache, deps, map[], domain);
+        PullTodos(icache, ccache, todos)
+    }
+
+    function FoldMetaSet(acc: Meta, metas: set<Meta>, domain:set<Key>) : (res:Meta)
+        requires MetaValid(acc)
+        requires forall kk :: kk in acc.deps ==> kk in domain
+        requires forall m :: m in metas ==> MetaValid(m) && m.key == acc.key && (forall kk :: kk in m.deps ==> kk in domain)
+        ensures MetaValid(res)
+        ensures forall kk :: kk in res.deps ==> kk in domain
+        decreases |metas|
+    {
+        if |metas| == 0 then
+            acc
+        else
+            var x :| x in metas;
+            FoldMetaSet(MetaMerge(acc, x), metas - {x}, domain)
+    }
+
+
+    function FoldVC(acc: VectorClock, vcs: set<VectorClock>) : (res:VectorClock)
+        requires VectorClockValid(acc)
+        requires forall m :: m in vcs ==> VectorClockValid(m)
+        ensures VectorClockValid(res)
+        decreases |vcs|
+    {
+        if |vcs| == 0 then
+            acc
+        else
+            var x :| x in vcs;
+            FoldVC(VCMerge(acc, x), vcs - {x})
+    }
+
+    function FoldDependency(acc: Dependency, deps: set<Dependency>) : (res:Dependency)
+        requires DependencyValid(acc)
+        requires forall m :: m in deps ==> DependencyValid(m)
+        ensures DependencyValid(res)
+        decreases |deps|
+    {
+        if |deps| == 0 then
+            acc
+        else
+            var x :| x in deps;
+            FoldDependency(DependencyMerge(acc, x), deps - {x})
+    }
+
+    function FoldMetaIntoICache(icache: ICache, metas: set<Meta>): ICache
+        requires ICacheValid(icache)
+        requires forall m :: m in metas ==> MetaValid(m) && (forall kk :: kk in m.deps ==> kk in Keys_domain && kk in icache)
+        decreases |metas|
+    {
+        if metas == {} then 
+            icache
+        else 
+            var m: Meta :| m in metas;
+            FoldMetaIntoICache(AddMetaToICache(icache, m), metas - {m})
+    }
+
+
+    function AdvanceVC(vc:VectorClock, i:int) : (res:VectorClock)
+        requires VectorClockValid(vc)
+        requires 0 <= i < Nodes 
+        ensures VectorClockValid(res)
+    {
+        vc[i:=vc[i]+1]
+    }
+
+
+    /** Key Properties */
+
+    predicate CausalCut(ccache: CCache)
+        requires CCacheValid(ccache)
+    {
+        forall k :: k in ccache ==>
+            forall kk :: kk in ccache[k].deps ==>
+                kk in ccache &&
+                (VCHappendsBefore(ccache[k].deps[kk], ccache[kk].vc) || VCEq(ccache[k].deps[kk], ccache[kk].vc))
+    }
+
+    predicate ReadsDepsAreMet(icache:ICache, ccache:CCache, deps:Dependency)
+        requires ICacheValid(icache)
+        requires CCacheValid(ccache)
+        requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+        requires DependencyValid(deps)
+    {
+        forall k :: k in deps ==> 
+            var m := FoldMetaSet(ccache[k], icache[k], icache.Keys);
+            VCEq(deps[k], m.vc) || VCHappendsBefore(deps[k], m.vc)
+    }
+
+    predicate UponReadsDepsAreMet(ccache:CCache, deps:Dependency)
+        requires CCacheValid(ccache)
+        requires forall k :: k in Keys_domain ==> k in ccache
+        requires DependencyValid(deps)
+    {
+        forall k :: k in deps ==> 
+            VCEq(deps[k], ccache[k].vc) || VCHappendsBefore(deps[k], ccache[k].vc)
+    }
+
+
+    /** Actions */
+    datatype Server = Server(
+        id : int,
+        gvc : VectorClock,
+        next : int,
+        icache : ICache,
+        ccache : CCache
+    )
+
+    predicate ServerValid(s:Server)
+    {
+        && 0 <= s.id < Nodes
+        && 0 <= s.next < Nodes
+        && VectorClockValid(s.gvc)
+        && ICacheValid(s.icache)
+        && CCacheValid(s.ccache)
+        && forall k :: k in Keys_domain ==> k in s.icache && k in s.ccache
+        && forall k :: k in s.ccache ==> k in s.icache
+    }
+
+
+    function InitICache(): ICache
+    {
+        map k | k in Keys_domain :: {EmptyMeta(k)}
+    }
+
+    function InitCCache(): CCache
+    {
+        map k | k in Keys_domain :: EmptyMeta(k)
+    }
+
+    predicate Init(s:Server, id:int)
+        requires 0 <= id < Nodes
+    {
+        && s.id == id
+        && s.next == Circle(id, Nodes)
+        && s.gvc == EmptyVC()
+        && s.icache == InitICache()
+        && s.ccache == InitCCache()
+    }
+
+    predicate ReceiveRead(s:Server, s':Server, p:Packet, sp:seq<Packet>)
+        requires p.msg.Message_Read?
+        requires ServerValid(s)
+        requires PacketValid(p)
+        // ensures ServerValid(s')
+    {
+        var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, p.msg.deps_read);
+        && s' == s.(icache := new_icache, ccache := new_ccache)
+        && sp == [Packet(s.id, p.src, 
+                        Message_Read_Reply(
+                            p.msg.key_read,
+                            new_ccache[p.msg.key_read].vc,
+                            new_ccache[p.msg.key_read].deps
+                        )
+                    )]
+    }
+
+    predicate ReceiveWrite(s:Server, s':Server, p:Packet, sp:seq<Packet>)
+        requires p.msg.Message_Write?
+        requires ServerValid(s)
+        requires PacketValid(p)
+    {
+        var new_vc := AdvanceVC(s.gvc, s.id);
+        var meta := Meta(p.msg.key_write, new_vc, p.msg.deps_write);
+        var local := set m | m in p.msg.local.Values;
+        var new_icache := s.icache[p.msg.key_write := s.icache[p.msg.key_write] + local + {meta}];
+        var wreply := Packet(s.id, p.src, Message_Write_Reply(p.msg.key_write, new_vc));
+        var propagate := Packet(s.id, s.next, Message_Propagation(p.msg.key_write, {meta}, s.id));
+        && s' == s.(gvc:=new_vc, icache := new_icache)
+        && sp == [wreply] + [propagate]
+    }
+
+
+    predicate ReceivePropagate(s:Server, s':Server, p:Packet, sp:seq<Packet>)
+        requires p.msg.Message_Propagation?
+        requires ServerValid(s)
+        requires PacketValid(p)
+    {
+        if s.next == p.msg.start then
+            var vcs := set x | x in p.msg.metas :: x.vc;
+            var new_gvc := FoldVC(s.gvc, vcs);
+            var deps := set x | x in p.msg.metas :: x.deps;
+            var new_deps := FoldDependency(map[], deps);
+
+            var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, new_deps);
+            && s' == s.(gvc := new_gvc, icache := new_icache, ccache := new_ccache)
+            && sp == []
+        else 
+            var new_icache := FoldMetaIntoICache(s.icache, p.msg.metas);
+            && s' == s.(icache := new_icache)
+            && sp == [Packet(s.id, s.next, p.msg)]
+    }
+
+
+    /** Client */
+    datatype Client = Client(
+        id : int,
+        local : map<Key, Meta>,
+        deps : Dependency
+    )
+
+    predicate ClientValid(c:Client)
+    {
+        && Nodes <= c.id < Nodes + Clients
+        && (forall k :: k in c.local ==> k in Keys_domain && MetaValid(c.local[k]) && c.local[k].key == k)
+        && DependencyValid(c.deps)
+    }
+
+    predicate SendRead(c:Client, c':Client, sp:seq<Packet>)
+        requires ClientValid(c)
+    {
+        var k :| 0 <= k < MaxKeys as int;
+        
+        if k in c.local then 
+            && c' == c
+            && sp == []
+        else 
+            var server :| 0 <= server < Nodes as int;
+            && c' == c
+            && sp == [Packet(c.id, server, Message_Read(k, c.deps))]
+    }
+
+    predicate ReceiveReadReply(c:Client, c':Client, p:Packet, sp:seq<Packet>)
+        requires ClientValid(c)
+        requires p.msg.Message_Read_Reply?
+        requires PacketValid(p)
+    {
+        var m := Meta(p.msg.key_rreply, p.msg.vc_rreply, p.msg.deps_rreply);
+
+        && c' == c.(local := c.local[p.msg.key_rreply := m], deps := DependencyInsertOrMerge(c.deps, p.msg.key_rreply, p.msg.vc_rreply))
+        && sp == []
+    }
+
+    predicate SendWrite(c:Client, c':Client, sp:seq<Packet>)
+        // requires ClientValid(c)
+    {
+        var k :| 0 <= k < MaxKeys as int;
+        var server :| 0 <= server < Nodes as int;
+        && c' == c
+        && sp == [Packet(c.id, server, Message_Write(k, c.deps, c.local))]
+    }
+
+    predicate ReceiveWriteReply(c:Client, c':Client, p:Packet, sp:seq<Packet>)
+        requires p.msg.Message_Write_Reply?
+    {
+        var k := p.msg.key_wreply;
+        var vc := p.msg.vc_wreply;
+
+        var m := Meta(k, vc, c.deps);
+        && c' == c.(local := c.local[k := m])
+        && sp == []
+    }
+}
