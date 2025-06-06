@@ -387,7 +387,9 @@ atexit.register(display_build_status)
 #
 ####################################################################
 
-verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/cache.dfy')
+# verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/distributed_system.dfy')
+verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/proof/causalcut.dfy')
+
 
 # verify_dafny_file('src/Dafny/Distributed/Services/Lock/Main.i.dfy')
 # verify_dafny_file('src/Dafny/Distributed/Services/SHT/Main.i.dfy')

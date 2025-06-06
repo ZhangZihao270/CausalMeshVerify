@@ -6,6 +6,7 @@ module CausalMesh_Cache_i {
     import opened Collections__Maps_i
     import opened CausalMesh_Types_i
     import opened CausalMesh_Message_i
+    import opened Environment_s
 
     function Circle(id:int, nodes:int) : (i:int)
         requires 0 <= id < nodes
@@ -351,7 +352,7 @@ module CausalMesh_Cache_i {
         map k | k in Keys_domain :: EmptyMeta(k)
     }
 
-    predicate Init(s:Server, id:int)
+    predicate ServerInit(s:Server, id:int)
         requires 0 <= id < Nodes
     {
         && s.id == id
@@ -369,7 +370,7 @@ module CausalMesh_Cache_i {
     {
         var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, p.msg.deps_read);
         && s' == s.(icache := new_icache, ccache := new_ccache)
-        && sp == [Packet(s.id, p.src, 
+        && sp == [LPacket(s.id, p.src, 
                         Message_Read_Reply(
                             p.msg.key_read,
                             new_ccache[p.msg.key_read].vc,
@@ -387,8 +388,8 @@ module CausalMesh_Cache_i {
         var meta := Meta(p.msg.key_write, new_vc, p.msg.deps_write);
         var local := set m | m in p.msg.local.Values;
         var new_icache := s.icache[p.msg.key_write := s.icache[p.msg.key_write] + local + {meta}];
-        var wreply := Packet(s.id, p.src, Message_Write_Reply(p.msg.key_write, new_vc));
-        var propagate := Packet(s.id, s.next, Message_Propagation(p.msg.key_write, {meta}, s.id));
+        var wreply := LPacket(s.id, p.src, Message_Write_Reply(p.msg.key_write, new_vc));
+        var propagate := LPacket(s.id, s.next, Message_Propagation(p.msg.key_write, {meta}, s.id));
         && s' == s.(gvc:=new_vc, icache := new_icache)
         && sp == [wreply] + [propagate]
     }
@@ -411,7 +412,7 @@ module CausalMesh_Cache_i {
         else 
             var new_icache := FoldMetaIntoICache(s.icache, p.msg.metas);
             && s' == s.(icache := new_icache)
-            && sp == [Packet(s.id, s.next, p.msg)]
+            && sp == [LPacket(s.id, s.next, p.msg)]
     }
 
 
@@ -429,6 +430,14 @@ module CausalMesh_Cache_i {
         && DependencyValid(c.deps)
     }
 
+    predicate ClientInit(c:Client, id:int)
+        requires Nodes <= id < Nodes + Clients
+    {
+        && c.id == id
+        && c.local == map[]
+        && c.deps == map[]
+    }
+
     predicate SendRead(c:Client, c':Client, sp:seq<Packet>)
         requires ClientValid(c)
     {
@@ -440,7 +449,7 @@ module CausalMesh_Cache_i {
         else 
             var server :| 0 <= server < Nodes as int;
             && c' == c
-            && sp == [Packet(c.id, server, Message_Read(k, c.deps))]
+            && sp == [LPacket(c.id, server, Message_Read(k, c.deps))]
     }
 
     predicate ReceiveReadReply(c:Client, c':Client, p:Packet, sp:seq<Packet>)
@@ -460,7 +469,7 @@ module CausalMesh_Cache_i {
         var k :| 0 <= k < MaxKeys as int;
         var server :| 0 <= server < Nodes as int;
         && c' == c
-        && sp == [Packet(c.id, server, Message_Write(k, c.deps, c.local))]
+        && sp == [LPacket(c.id, server, Message_Write(k, c.deps, c.local))]
     }
 
     predicate ReceiveWriteReply(c:Client, c':Client, p:Packet, sp:seq<Packet>)
@@ -473,4 +482,152 @@ module CausalMesh_Cache_i {
         && c' == c.(local := c.local[k := m])
         && sp == []
     }
+
+    function {:opaque} ExtractSentPacketsFromIos(ios:seq<CMIo>) : seq<Packet>
+        ensures forall p :: p in ExtractSentPacketsFromIos(ios) <==> LIoOpSend(p) in ios
+    {
+        if |ios| == 0 then
+            []
+        else if ios[0].LIoOpSend? then
+            [ios[0].s] + ExtractSentPacketsFromIos(ios[1..])
+        else
+            ExtractSentPacketsFromIos(ios[1..])
+    }
+
+    predicate ServerProcessPacket(s:Server, s':Server, ios:seq<CMIo>)
+        requires ServerValid(s)
+        requires |ios| >= 1
+        requires ios[0].LIoOpReceive?
+        requires PacketValid(ios[0].r)
+        requires var msg := ios[0].r.msg; 
+                msg.Message_Read? || msg.Message_Write? || msg.Message_Propagation?
+    {
+        && (forall io :: io in ios[1..] ==> io.LIoOpSend?)
+        && var sent_packets := ExtractSentPacketsFromIos(ios);
+            match ios[0].r.msg 
+                case Message_Read(_,_) => ReceiveRead(s, s', ios[0].r, sent_packets)
+                case Message_Write(_,_,_) => ReceiveWrite(s, s', ios[0].r, sent_packets)
+                case Message_Propagation(_,_,_) => ReceivePropagate(s, s', ios[0].r, sent_packets)
+    }
+
+    // predicate NextProcessPacket(s:Server, s':Server, c:Client, c':Client, ios:seq<CMIo>)
+    //     requires ServerValid(s)
+    //     requires ClientValid(c)
+    // {
+    //     && |ios| >= 1
+    //     && if ios[0].LIoOpTimeoutReceive? then
+    //         s' == s && |ios| == 1
+    //         else
+    //         (&& ios[0].LIoOpReceive?
+    //         && if ios[0].r.msg.Message_Read? || ios[0].r.msg.Message_Write? || ios[0].r.msg.Message_Propagation? then
+    //             ServerProcessPacket(s, s', ios)
+    //            else
+    //             ClientProcessPacket(c, c', ios)
+    //         )
+    // }
+
+    predicate ServerNextProcessPacket(s:Server, s':Server, ios:seq<CMIo>)
+        requires ServerValid(s)
+    {
+        && |ios| >= 1
+        && if ios[0].LIoOpTimeoutReceive? then
+            s' == s && |ios| == 1
+           else
+            (&& ios[0].LIoOpReceive?
+             && PacketValid(ios[0].r)
+            && if ios[0].r.msg.Message_Read? || ios[0].r.msg.Message_Write? || ios[0].r.msg.Message_Propagation? then
+                ServerProcessPacket(s, s', ios)
+               else
+                s' == s && |ios| == 1
+            )
+    }
+
+    datatype LServer = LServer(s:Server)
+
+    predicate LServerInit(s:LServer, id:int)
+        requires 0 <= id < Nodes
+    {
+        && ServerInit(s.s, id)
+        // && s.nextActionIndex == 0
+    }
+
+    predicate LServerNext(s:LServer, s':LServer, ios:seq<CMIo>)
+    {
+        && ServerValid(s.s)
+        && ServerNextProcessPacket(s.s, s'.s, ios)
+    }
+
+
+    predicate ClientProcessPacket(s:Client, s':Client, ios:seq<CMIo>)
+        requires ClientValid(s)
+        requires |ios| >= 1
+        requires ios[0].LIoOpReceive?
+        requires PacketValid(ios[0].r)
+        requires var msg := ios[0].r.msg;
+                msg.Message_Read_Reply? || msg.Message_Write_Reply?
+    {
+        && (forall io :: io in ios[1..] ==> io.LIoOpSend?)
+        && var sent_packets := ExtractSentPacketsFromIos(ios);
+            match ios[0].r.msg 
+                case Message_Read_Reply(_,_,_) => ReceiveReadReply(s, s', ios[0].r, sent_packets)
+                case Message_Write_Reply(_,_) => ReceiveWriteReply(s, s', ios[0].r, sent_packets)
+    }
+
+    predicate ClientNextProcessPacket(s:Client, s':Client, ios:seq<CMIo>)
+        requires ClientValid(s)
+    {
+        && |ios| >= 1
+        && if ios[0].LIoOpTimeoutReceive? then
+            s' == s && |ios| == 1
+           else
+            (&& ios[0].LIoOpReceive?
+            && PacketValid(ios[0].r)
+            && if ios[0].r.msg.Message_Read_Reply? || ios[0].r.msg.Message_Write_Reply? then
+                ClientProcessPacket(s, s', ios)
+               else
+                s' == s && |ios| == 1
+            )
+    }
+
+    predicate SpontaneousIos(ios:seq<CMIo>, clocks:int)
+        requires 0<=clocks<=1
+    {
+        && clocks <= |ios|
+        && (forall i :: 0<=i<clocks ==> ios[i].LIoOpReadClock?)
+        && (forall i :: clocks<=i<|ios| ==> ios[i].LIoOpSend?)
+    }
+
+    predicate ClientNoReceiveNext(s:Client, s':Client, nextActionIndex:int, ios:seq<CMIo>)
+        requires ClientValid(s)
+    {
+        var sent_packets := ExtractSentPacketsFromIos(ios);
+
+        if nextActionIndex == 1 then 
+            && SpontaneousIos(ios, 0)
+            && SendRead(s, s', sent_packets)
+        else 
+            && nextActionIndex == 3
+            && SpontaneousIos(ios, 0)
+            && SendWrite(s, s', sent_packets)
+    }
+
+    datatype LClient = LClient(c:Client, nextActionIndex:int)
+
+    predicate LClientInit(s:LClient, id:int)
+        requires Nodes <= id < Nodes + Clients
+    {
+        && ClientInit(s.c, id)
+        && s.nextActionIndex == 0
+    }
+
+    predicate LClientNext(s:LClient, s':LClient, ios:seq<CMIo>)
+    {
+        && ClientValid(s.c)
+        && s'.nextActionIndex == (s.nextActionIndex + 1) % 3
+        && if s.nextActionIndex == 0 then 
+            ClientNextProcessPacket(s.c, s'.c, ios)
+           else 
+            ClientNoReceiveNext(s.c, s'.c, s.nextActionIndex, ios)
+    }
+
 }
