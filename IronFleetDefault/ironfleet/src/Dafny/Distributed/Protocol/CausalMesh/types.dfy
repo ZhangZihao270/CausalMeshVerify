@@ -114,6 +114,7 @@ module CausalMesh_Types_i {
         requires k in Keys_domain
         requires VectorClockValid(vc)
         ensures DependencyValid(res)
+        ensures k in res
     {
         if k in dep then
             var d := dep[k := VCMerge(dep[k], vc)];
