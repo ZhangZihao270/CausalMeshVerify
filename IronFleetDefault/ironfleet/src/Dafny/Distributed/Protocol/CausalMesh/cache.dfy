@@ -173,16 +173,68 @@ module CausalMesh_Cache_i {
 
 
 
+    // function GetDeps2(icache:ICache, deps:Dependency, todos:Dependency, domain:set<Key>) : (res:Dependency)
+    //     requires forall k :: k in icache ==> k in Keys_domain && (forall m :: m in icache[k] ==> MetaValid(m) && m.key == k
+    //                 && (forall kk :: kk in m.deps ==> kk in domain && kk in Keys_domain))
+    //     requires DependencyValid(deps)
+    //     requires forall k :: k in icache ==> k in domain
+    //     // requires forall k :: k in Keys_domain ==> k in icache // should we have this?
+    //     requires forall k :: k in deps ==> k in domain
+    //     requires forall k :: k in todos ==> k in domain && k in Keys_domain && VectorClockValid(todos[k])
+    //     ensures DependencyValid(res)
+    //     ensures forall k :: k in res ==> k in domain
+    //     ensures forall k :: k in todos ==> k in res && (VCHappendsBefore(todos[k], res[k]) || VCEq(todos[k], res[k]))
+    //     // ensures forall k :: k in deps ==> k in res
+    //     decreases |icache|, |deps|
+    // {
+    //     if |deps| == 0 then 
+    //         todos 
+    //     else 
+    //         var k :| k in deps;
+    //         var new_deps := RemoveElt(deps, k);
+    //         if k in todos && (VCHappendsBefore(deps[k], todos[k]) || VCEq(deps[k], todos[k])) then 
+    //             GetDeps2(icache, new_deps, todos, domain)
+    //         else if !(k in icache) then 
+    //             GetDeps2(icache, new_deps, todos, domain)
+    //         else 
+    //             var metas := set m | m in icache[k] && (VCHappendsBefore(m.vc, deps[k]) || VCEq(m.vc, deps[k]));
+    //             var initial := EmptyMeta(k);
+    //             assert forall m :: m in metas ==> forall kk :: kk in m.deps ==> kk in domain;
+    //             var merged := FoldMetaSet(initial, metas, domain);
+
+    //             lemma_FoldMetaBounded(initial, metas, deps[k], domain);
+    //             assert VCHappendsBefore(merged.vc, deps[k]) || VCEq(merged.vc, deps[k]);
+    //             assert forall kk :: kk in merged.deps ==> kk in domain;
+    //             // var updaetd := GetDeps2(icache, merged.deps, )
+    //             var todos' := DependencyInsertOrMerge(todos, k, merged.vc);
+
+    //             // assert VCHappendsBefore(todos'[k], deps[k]) || VCEq(todos'[k], deps[k]);
+
+    //             var new_cache := RemoveElt(icache, k); // is this right?
+    //             var res := GetDeps2(new_cache, merged.deps, todos', domain);
+
+    //             assert forall k :: k in todos' ==> k in res && (VCHappendsBefore(todos'[k], res[k]) || VCEq(todos'[k], res[k]));
+
+    //             // var final := DependencyMerge(todos', res);
+    //             // lemma_DependencyMergeDominatedByTheLargerOne(todos', res);
+    //             // assert final == res;
+    //             // var final := DependencyInsertOrMerge(added2, k, merged.vc);
+    //             GetDeps2(icache, new_deps, res, domain)
+    // }
+
     function GetDeps2(icache:ICache, deps:Dependency, todos:Dependency, domain:set<Key>) : (res:Dependency)
         requires forall k :: k in icache ==> k in Keys_domain && (forall m :: m in icache[k] ==> MetaValid(m) && m.key == k
                     && (forall kk :: kk in m.deps ==> kk in domain && kk in Keys_domain))
         requires DependencyValid(deps)
         requires forall k :: k in icache ==> k in domain
+        // requires forall k :: k in Keys_domain ==> k in icache // should we have this?
         requires forall k :: k in deps ==> k in domain
         requires forall k :: k in todos ==> k in domain && k in Keys_domain && VectorClockValid(todos[k])
         ensures DependencyValid(res)
         ensures forall k :: k in res ==> k in domain
-        decreases |icache|, |deps|
+        ensures forall k :: k in todos ==> k in res && (VCHappendsBefore(todos[k], res[k]) || VCEq(todos[k], res[k]))
+        // ensures forall k :: k in deps ==> k in res
+        decreases |icache.Values|, |deps|
     {
         if |deps| == 0 then 
             todos 
@@ -195,18 +247,39 @@ module CausalMesh_Cache_i {
                 GetDeps2(icache, new_deps, todos, domain)
             else 
                 var metas := set m | m in icache[k] && (VCHappendsBefore(m.vc, deps[k]) || VCEq(m.vc, deps[k]));
-                var initial := EmptyMeta(k);
-                assert forall m :: m in metas ==> forall kk :: kk in m.deps ==> kk in domain;
-                var merged := FoldMetaSet(initial, metas, domain);
-                assert forall kk :: kk in merged.deps ==> kk in domain;
-                // var updaetd := GetDeps2(icache, merged.deps, )
-                var added1 := DependencyInsertOrMerge(todos, k, merged.vc);
-                var new_cache := RemoveElt(icache, k); // is this right?
-                var res := GetDeps2(new_cache, merged.deps, added1, domain);
-                var added2 := DependencyMerge(added1, res);
-                var final := DependencyInsertOrMerge(added2, k, merged.vc);
-                GetDeps2(icache, new_deps, final, domain)
+                if |metas| > 0 then
+                    var initial := EmptyMeta(k);
+                    assert forall m :: m in metas ==> forall kk :: kk in m.deps ==> kk in domain;
+                    var merged := FoldMetaSet(initial, metas, domain);
+
+                    lemma_FoldMetaBounded(initial, metas, deps[k], domain);
+                    assert VCHappendsBefore(merged.vc, deps[k]) || VCEq(merged.vc, deps[k]);
+                    assert forall kk :: kk in merged.deps ==> kk in domain;
+                    // var updaetd := GetDeps2(icache, merged.deps, )
+                    var todos' := DependencyInsertOrMerge(todos, k, merged.vc);
+
+                    // assert VCHappendsBefore(todos'[k], deps[k]) || VCEq(todos'[k], deps[k]);
+
+                    // var new_cache := RemoveElt(icache, k); // is this right?
+                    var new_cache := icache[k:= icache[k] - metas];
+                    assert icache[k] >= metas;
+                    lemma_MapRemoveSubsetOfTheValOfKey(icache, k, metas);
+                    assert |new_cache.Values| < |icache.Values|;
+
+                    var res := GetDeps2(new_cache, merged.deps, todos', domain);
+
+                    assert forall k :: k in todos' ==> k in res && (VCHappendsBefore(todos'[k], res[k]) || VCEq(todos'[k], res[k]));
+
+                    // var final := DependencyMerge(todos', res);
+                    // lemma_DependencyMergeDominatedByTheLargerOne(todos', res);
+                    // assert final == res;
+                    // var final := DependencyInsertOrMerge(added2, k, merged.vc);
+                    GetDeps2(icache, new_deps, res, domain)
+                else 
+                    GetDeps2(icache, new_deps, todos, domain)
     }
+
+    
 
     function PullDeps2(icache:ICache, ccache:CCache, deps:Dependency) : (c:(ICache, CCache))
         requires ICacheValid(icache)
@@ -225,47 +298,6 @@ module CausalMesh_Cache_i {
         PullTodos(icache, ccache, todos)
     }
 
-    function FoldMetaSet(acc: Meta, metas: set<Meta>, domain:set<Key>) : (res:Meta)
-        requires MetaValid(acc)
-        requires forall kk :: kk in acc.deps ==> kk in domain
-        requires forall m :: m in metas ==> MetaValid(m) && m.key == acc.key && (forall kk :: kk in m.deps ==> kk in domain)
-        ensures MetaValid(res)
-        ensures forall kk :: kk in res.deps ==> kk in domain
-        decreases |metas|
-    {
-        if |metas| == 0 then
-            acc
-        else
-            var x :| x in metas;
-            FoldMetaSet(MetaMerge(acc, x), metas - {x}, domain)
-    }
-
-
-    function FoldVC(acc: VectorClock, vcs: set<VectorClock>) : (res:VectorClock)
-        requires VectorClockValid(acc)
-        requires forall m :: m in vcs ==> VectorClockValid(m)
-        ensures VectorClockValid(res)
-        decreases |vcs|
-    {
-        if |vcs| == 0 then
-            acc
-        else
-            var x :| x in vcs;
-            FoldVC(VCMerge(acc, x), vcs - {x})
-    }
-
-    function FoldDependency(acc: Dependency, deps: set<Dependency>) : (res:Dependency)
-        requires DependencyValid(acc)
-        requires forall m :: m in deps ==> DependencyValid(m)
-        ensures DependencyValid(res)
-        decreases |deps|
-    {
-        if |deps| == 0 then
-            acc
-        else
-            var x :| x in deps;
-            FoldDependency(DependencyMerge(acc, x), deps - {x})
-    }
 
     function FoldMetaIntoICache(icache: ICache, metas: set<Meta>): ICache
         requires ICacheValid(icache)

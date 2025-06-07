@@ -148,14 +148,74 @@ lemma lemma_CMNextServerRemainsCausalCut(b:Behavior<CMState>, i:int, idx:int)
  
 }
 
-lemma {:axiom} lemma_PullDeps2RemainsCausalCut(icache:ICache, ccache:CCache, deps:Dependency)
+lemma lemma_PullDeps2RemainsCausalCut(icache:ICache, ccache:CCache, deps:Dependency)
     requires ICacheValid(icache)
     requires CCacheValid(ccache)
     requires forall k :: k in ccache ==> k in icache
     requires DependencyValid(deps)
     requires forall k :: k in deps ==> k in icache
+    requires forall k :: k in Keys_domain ==> k in icache && k in ccache
     requires CausalCut(ccache)
     ensures var (new_icache, new_ccache) := PullDeps2(icache, ccache, deps);
             CausalCut(new_ccache)
+{
+    var domain := icache.Keys + deps.Keys;
+    var todos := GetDeps2(icache, deps, map[], domain);
+    lemma_PullTodosRemainCausalCut(icache, ccache, todos);
+}
 
+lemma lemma_PullTodosRemainCausalCut(icache:ICache, ccache:CCache, todos:Dependency)
+    requires ICacheValid(icache)
+    requires CCacheValid(ccache)
+    requires DependencyValid(todos) 
+    requires forall k :: k in todos ==> k in icache  
+    requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+    requires CausalCut(ccache)
+    ensures var (new_icache, new_ccache) := PullTodos(icache, ccache, todos);
+            CausalCut(new_ccache)
+// {
+//     if |todos| == 0 then 
+//         returns;
+//     else 
+
+// }
+
+lemma lemma_InsertIntoCCacheRemainCausalCut(c:CCache, m:Meta)
+    requires CCacheValid(c)
+    requires MetaValid(m)
+    requires CausalCut(c)
+    requires forall k :: k in Keys_domain ==> k in c
+    // how to guarantee this?
+    requires forall kk :: kk in m.deps ==> VCHappendsBefore(m.deps[kk], c[kk].vc) || VCEq(m.deps[kk], c[kk].vc)
+    ensures var new_cache := InsertIntoCCache(c, m);
+            CausalCut(new_cache)
+{
+    assert m.key in c;
+    var m1 := c[m.key];
+    assert forall kk :: kk in m1.deps ==> 
+        kk in c && (VCHappendsBefore(m1.deps[kk], c[kk].vc) || VCEq(m1.deps[kk], c[kk].vc)); 
+
+    var new_deps := DependencyMerge(m.deps, m1.deps); 
+    var new_vc := VCMerge(m.vc, m1.vc);
+    
+    // var k :| k in m.deps && k in m1.deps;
+    // assert new_deps[k] == VCMerge(m.deps[k], m1.deps[k]);
+
+    forall k | k in new_deps 
+    {
+        if k in m.deps && k in m1.deps {
+            assert new_deps[k] == VCMerge(m.deps[k], m1.deps[k]);
+            assert forall i :: 0 <= i < |new_deps[k]| ==> new_deps[k][i] == m.deps[k][i] || new_deps[k][i] == m1.deps[k][i];
+            assert VCHappendsBefore(new_deps[k], c[k].vc) || VCEq(new_deps[k], c[k].vc);
+        }
+        else if k in m1.deps {
+            assert new_deps[k] == m1.deps[k];
+            assert VCHappendsBefore(new_deps[k], c[k].vc) || VCEq(new_deps[k], c[k].vc);
+        }
+        else { 
+            assert new_deps[k] == m.deps[k];
+            assert VCHappendsBefore(new_deps[k], c[k].vc) || VCEq(new_deps[k], c[k].vc);
+        }
+    } 
+}
 }

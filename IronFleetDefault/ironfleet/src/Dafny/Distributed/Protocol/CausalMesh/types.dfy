@@ -16,7 +16,8 @@ module CausalMesh_Types_i {
 
     predicate VectorClockValid(vc:VectorClock)
     {
-        |vc| == Nodes
+        && |vc| == Nodes
+        && forall i :: 0 <= i < |vc| ==> vc[i] >= 0
     }
 
     function EmptyVC() : (res:VectorClock)
@@ -37,13 +38,15 @@ module CausalMesh_Types_i {
         requires VectorClockValid(vc2)
     {
         && !VCEq(vc1, vc2)
-        && forall i :: 0 <= i < |vc1| && vc1[i] <= vc2[i]
+        && forall i :: 0 <= i < |vc1| ==> vc1[i] <= vc2[i]
     }
 
     function VCMerge(vc1:VectorClock, vc2:VectorClock) : (res:VectorClock)
         requires VectorClockValid(vc1)
         requires VectorClockValid(vc2)
         ensures VectorClockValid(res)
+        ensures (VCHappendsBefore(vc1, res) || VCEq(vc1, res))
+        ensures (VCHappendsBefore(vc2, res) || VCEq(vc2, res))
     {
         MergeSeqs(vc1, vc2)
     }
@@ -51,6 +54,8 @@ module CausalMesh_Types_i {
     function MergeSeqs(s1:seq<int>, s2:seq<int>) : (res:seq<int>)
         requires |s1| == |s2|
         ensures |res| == |s1|
+        ensures forall i :: 0 <= i < |s1| ==> s1[i] <= res[i] && s2[i] <= res[i]
+        ensures forall i :: 0 <= i < |s1| ==> res[i] == s1[i] || res[i] == s2[i]
     {   
         if |s1| == 0 then
             []
@@ -74,9 +79,13 @@ module CausalMesh_Types_i {
         forall k :: k in dep1 ==> k in dep2 && VCEq(dep1[k], dep2[k])
     }
 
-    function DependencyMerge(dep1:Dependency, dep2:Dependency) : Dependency
+    function DependencyMerge(dep1:Dependency, dep2:Dependency) : (res:Dependency)
         requires DependencyValid(dep1)
         requires DependencyValid(dep2)
+        ensures DependencyValid(res)
+        ensures forall k :: k in dep1 ==> k in res 
+        ensures forall k :: k in dep2 ==> k in res
+        ensures res.Keys == dep1.Keys + dep2.Keys
     {
         map k | k in dep1.Keys + dep2.Keys ::
             if k in dep1 && k in dep2 then
@@ -85,6 +94,19 @@ module CausalMesh_Types_i {
                 dep1[k]
             else
                 dep2[k]
+    }
+
+    lemma lemma_DependencyMergeDominatedByTheLargerOne(dep1:Dependency, dep2:Dependency)
+        requires DependencyValid(dep1)
+        requires DependencyValid(dep2)
+        requires forall k :: k in dep1 ==>
+                        k in dep2 &&
+                        (VCHappendsBefore(dep1[k], dep2[k]) || VCEq(dep1[k], dep2[k]))
+        ensures DependencyMerge(dep1, dep2) == dep2
+    {
+        assert forall k :: k in DependencyMerge(dep1, dep2) <==> k in dep2;
+        
+        assert forall k :: k in dep2 ==> DependencyMerge(dep1, dep2)[k] == dep2[k];
     }
 
     function DependencyInsertOrMerge(dep:Dependency, k:Key, vc:VectorClock) : (res:Dependency)
@@ -136,9 +158,89 @@ module CausalMesh_Types_i {
         requires m1.key == m2.key
         requires MetaValid(m1)
         requires MetaValid(m2)
+        ensures MetaValid(res)
     {
         m1.(vc := VCMerge(m1.vc, m2.vc), deps := DependencyMerge(m1.deps, m2.deps))
     }
+
+    function FoldMetaSet(acc: Meta, metas: set<Meta>, domain:set<Key>) : (res:Meta)
+        requires MetaValid(acc)
+        requires forall kk :: kk in acc.deps ==> kk in domain
+        requires forall m :: m in metas ==> MetaValid(m) && m.key == acc.key && (forall kk :: kk in m.deps ==> kk in domain)
+        ensures MetaValid(res)
+        ensures forall kk :: kk in res.deps ==> kk in domain
+        decreases |metas|
+    {
+        if |metas| == 0 then
+            acc
+        else
+            var x :| x in metas;
+            FoldMetaSet(MetaMerge(acc, x), metas - {x}, domain)
+    }
+
+    // lemma VCMergeBounded(metas: set<Meta>, bound: VectorClock)
+    //     requires forall m :: m in metas ==> VCHappendsBefore(m.vc, bound) || VCEq(m.vc, bound)
+    //     ensures VCHappendsBefore(FoldMetaSet(metas).vc, bound) || VCEq(FoldMetaSet(metas).vc, bound)
+    // {
+    //     // inductive proof over FoldVC
+    // }
+
+    lemma lemma_FoldMetaBounded(acc: Meta, metas: set<Meta>, bound: VectorClock, domain: set<Key>)
+        requires MetaValid(acc)
+        requires VectorClockValid(bound)
+        requires forall kk :: kk in acc.deps ==> kk in domain
+        requires forall m :: m in metas ==> MetaValid(m) && m.key == acc.key && (forall kk :: kk in m.deps ==> kk in domain)
+        requires VCHappendsBefore(acc.vc, bound) || VCEq(acc.vc, bound)
+        requires forall m :: m in metas ==> VCHappendsBefore(m.vc, bound) || VCEq(m.vc, bound)
+        ensures  VCHappendsBefore(FoldMetaSet(acc, metas, domain).vc, bound) || VCEq(FoldMetaSet(acc, metas, domain).vc, bound)
+        decreases |metas|
+    {
+        if |metas| == 0 {
+            return;
+        }
+
+        var x :| x in metas;
+
+        // Step 1: prove MetaMerge(acc, x).vc <= bound
+        assert VCHappendsBefore(acc.vc, bound) || VCEq(acc.vc, bound);
+        assert VCHappendsBefore(x.vc, bound) || VCEq(x.vc, bound);
+        assert VCHappendsBefore(MetaMerge(acc, x).vc, bound) || VCEq(MetaMerge(acc, x).vc, bound);
+
+        // Step 2: call induction on smaller set
+        lemma_FoldMetaBounded(MetaMerge(acc, x), metas - {x}, bound, domain);
+    }
+
+
+    function FoldVC(acc: VectorClock, vcs: set<VectorClock>) : (res:VectorClock)
+        requires VectorClockValid(acc)
+        requires forall m :: m in vcs ==> VectorClockValid(m)
+        ensures VectorClockValid(res)
+        decreases |vcs|
+    {
+        if |vcs| == 0 then
+            acc
+        else
+            var x :| x in vcs;
+            FoldVC(VCMerge(acc, x), vcs - {x})
+    }
+
+    function FoldDependency(acc: Dependency, deps: set<Dependency>) : (res:Dependency)
+        requires DependencyValid(acc)
+        requires forall m :: m in deps ==> DependencyValid(m)
+        ensures DependencyValid(res)
+        decreases |deps|
+    {
+        if |deps| == 0 then
+            acc
+        else
+            var x :| x in deps;
+            FoldDependency(DependencyMerge(acc, x), deps - {x})
+    }
+
+    lemma {:axiom} lemma_MapRemoveSubsetOfTheValOfKey<K,V>(m:map<K,set<V>>, k:K, s:set<V>)
+        requires k in m && m[k] >= s
+        ensures |m.Values| > |m[k := m[k] - s].Values|
+    
 
     function EmptyMeta(k:Key) : (res:Meta)
         requires k in Keys_domain
