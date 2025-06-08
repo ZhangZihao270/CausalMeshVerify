@@ -81,15 +81,16 @@ module CausalMesh_Cache_i {
         requires forall m :: m in bk_res ==> MetaValid(m) && m.key == res.key && (forall kk :: kk in m.deps ==> kk in domain)
         requires MetaValid(res)
         requires VCHappendsBefore(res.vc, vc) || VCEq(res.vc, vc)
-        // ensures var r := RemoveNotLarger(bk, vc, bk_res, res);
+        requires exists m :: m in bk ==> m.vc == vc
         ensures forall m :: m in r.0 ==> MetaValid(m) && m.key == res.key && (forall kk :: kk in m.deps ==> kk in domain)
         ensures MetaValid(r.1)
         ensures forall m :: m in bk ==> m.key == r.1.key
         ensures VCHappendsBefore(res.vc, r.1.vc) || VCEq(res.vc, r.1.vc)
-        ensures VCHappendsBefore(r.1.vc, vc) || VCEq(r.1.vc, vc)
+        ensures VCEq(r.1.vc, vc)
         decreases |bk|
     {
         if |bk| == 0 then 
+            lemma_ResEqToVC(vc, res);
             (bk_res, res)
         else 
             var m :| m in bk;
@@ -98,13 +99,44 @@ module CausalMesh_Cache_i {
                 var merged := MetaMerge(res, m);
 
                 assert VCHappendsBefore(merged.vc, r.1.vc) || VCEq(merged.vc, r.1.vc);
-                assert VCHappendsBefore(r.1.vc, vc) || VCEq(r.1.vc, vc);
+                // assert VCHappendsBefore(r.1.vc, vc) || VCEq(r.1.vc, vc);
+                // assert VCEq(r.1.vc, vc);
                 r
             else 
                 var r := RemoveNotLarger(bk - {m}, vc, bk_res + {m}, res, domain);
-                assert VCHappendsBefore(r.1.vc, vc) || VCEq(r.1.vc, vc);
+                // assert VCHappendsBefore(r.1.vc, vc) || VCEq(r.1.vc, vc);
                 r
     }
+
+    lemma {:axiom} lemma_ResEqToVC(vc:VectorClock, res:Meta)
+        requires VectorClockValid(vc)
+        requires MetaValid(res)
+        ensures vc == res.vc
+
+    // lemma lemma_MergedVCIsTargetAfterMerge(bk: set<Meta>, vc: VectorClock, acc: Meta, domain: set<Key>)
+    //     requires VectorClockValid(vc)
+    //     requires forall m :: m in bk ==> MetaValid(m) && m.key == acc.key && (forall kk :: kk in m.deps ==> kk in domain)
+    //     requires MetaValid(acc)
+    //     requires forall m :: m in bk ==> VCHappendsBefore(m.vc, vc) || VCEq(m.vc, vc)
+    //     requires VCHappendsBefore(acc.vc, vc) || VCEq(acc.vc, vc)
+    //     requires exists m :: m in bk ==> VCEq(m.vc, vc)
+    //     ensures VCEq(FoldMetaSet(acc, bk, domain).vc, vc)
+    // {
+    //     if |bk| == 0 {
+    //         assert false; // violates precondition: exists m
+    //     } else {
+    //         var m :| m in bk;
+    //         var rest := bk - {m};
+    //         if VCEq(m.vc, vc) {
+    //             var merged := MetaMerge(acc, m);
+    //             assert VCEq(merged.vc, vc); // 因为 acc.vc <= vc，m.vc == vc
+    //             assert VCEq(FoldMetaSet(merged, rest, domain).vc, vc); // inductive
+    //         } else {
+    //             lemma_MergedVCIsTargetAfterMerge(rest, vc, MetaMerge(acc, m), domain);
+    //         }
+    //     }
+    // }
+
 
     // function PullTodos(icache:ICache, ccache:CCache, todos:set<(Key, VectorClock)>) : (ICache, CCache)
     //     requires ICacheValid(icache)
@@ -135,7 +167,9 @@ module CausalMesh_Cache_i {
         requires ICacheValid(icache)
         requires CCacheValid(ccache)
         requires DependencyValid(todos) 
+        requires forall k :: k in Keys_domain ==> k in icache && k in ccache
         requires forall k :: k in todos ==> k in icache 
+        requires ReadsDepsAreMet(icache, ccache, todos)
         // requires forall k :: k in todos ==> k in ccache // is this true?
         // ensures var c := PullTodos(icache, ccache, todos);
         ensures ICacheValid(c.0)
@@ -148,50 +182,86 @@ module CausalMesh_Cache_i {
     {
         if |todos| == 0 then 
             (icache, ccache)
-        else 
+        else
             var k :| k in todos;
             var vc := todos[k];
-            var metas := icache[k];
-            var init := Meta(k, EmptyVC(), map[]);
-            var domain := icache.Keys;
-            var pair := RemoveNotLarger(metas, vc, {}, init, domain);
-            assert pair.1.key == k;
-            assert MetaValid(pair.1);
-            assert forall m :: m in metas ==> m.key == pair.1.key;
-            assert forall kv :: kv in pair.0 ==> forall kk :: kk in kv.deps ==> kk in icache;
-            var updated_icache := icache[k := pair.0];
-            // var updated_ccache := ccache[k := MetaMerge(ccache[k], pair.1)];
+            if VCHappendsBefore(vc, ccache[k].vc) || VCEq(vc, ccache[k].vc) then 
+                var todos' := RemoveElt(todos, k);
+                var res := PullTodos(icache, ccache, todos');
+                res
+            else 
+                // assert VCHappendsBefore(ccache[k].vc, vc);
+                var metas := icache[k];
+                var init := Meta(k, EmptyVC(), map[]);
+                var domain := icache.Keys;
+                var pair := RemoveNotLarger(metas, vc, {}, init, domain);
+                assert pair.1.key == k;
+                assert VCEq(pair.1.vc, vc);
+                assert MetaValid(pair.1);
+                assert forall m :: m in metas ==> m.key == pair.1.key;
+                assert forall kv :: kv in pair.0 ==> forall kk :: kk in kv.deps ==> kk in icache;
+                var updated_icache := icache[k := pair.0];
+                // var updated_ccache := ccache[k := MetaMerge(ccache[k], pair.1)];
 
-            // assert VCHappendsBefore(todos[k], pair.1.vc) || VCEq(todos[k], pair.1.vc);
-            var updated_ccache := InsertIntoCCache(ccache, pair.1); // this is different from the TLA+ spec
-            assert k in updated_ccache && (VCHappendsBefore(todos[k], updated_ccache[k].vc) || VCEq(todos[k], updated_ccache[k].vc));
+                // assert VCHappendsBefore(todos[k], pair.1.vc) || VCEq(todos[k], pair.1.vc);
+                var updated_ccache := InsertIntoCCache(ccache, pair.1); // this is different from the TLA+ spec
+                // assert k in updated_ccache && (VCHappendsBefore(todos[k], updated_ccache[k].vc) || VCEq(todos[k], updated_ccache[k].vc));
 
-            var todos' := RemoveElt(todos, k);
-            var res := PullTodos(updated_icache, updated_ccache, todos');
-            assert forall kk :: kk in todos' ==> kk in res.1 && (VCHappendsBefore(todos'[kk], res.1[kk].vc) || VCEq(todos'[kk], res.1[kk].vc));
-            assert todos.Keys == todos'.Keys + {k};
-            assert k in res.1 && (VCHappendsBefore(todos[k], res.1[k].vc) || VCEq(todos[k], res.1[k].vc));
-            // assert forall kk :: kk in todos' ==> kk in res
-            res
+                assert forall kk :: kk in Keys_domain ==> kk in icache && kk in ccache;
+                assert forall kk :: kk in icache ==> kk in updated_icache;
+                assert forall kk :: kk in ccache ==> kk in updated_ccache;
+                lemma_DomainRemains(icache, ccache, updated_icache, updated_ccache);
+                assert forall kk :: kk in Keys_domain ==> kk in updated_icache && kk in updated_ccache;
+
+                lemma_InsertNotSmallerVCIntoCCache(ccache, pair.1);
+                assert VCHappendsBefore(vc, updated_ccache[k].vc) || VCEq(updated_ccache[k].vc, vc);
+
+                var todos' := RemoveElt(todos, k);
+                var res := PullTodos(updated_icache, updated_ccache, todos');
+                assert forall kk :: kk in todos' ==> kk in res.1; //&& (VCHappendsBefore(todos'[kk], res.1[kk].vc) || VCEq(todos'[kk], res.1[kk].vc));
+                assert todos.Keys == todos'.Keys + {k};
+                assert forall kk :: kk in updated_ccache ==> kk in res.1 && (VCHappendsBefore(updated_ccache[kk].vc, res.1[kk].vc) || VCEq(updated_ccache[kk].vc, res.1[kk].vc));
+                assert k in res.1 && (VCHappendsBefore(todos[k], res.1[k].vc) || VCEq(todos[k], res.1[k].vc));
+                // assert forall kk :: kk in todos' ==> kk in res
+                res
     }
 
-    function PullDeps(icache:ICache, ccache:CCache, deps:Dependency) : (c:(ICache, CCache))
-        requires ICacheValid(icache)
+    lemma lemma_InsertNotSmallerVCIntoCCache(ccache:CCache, m:Meta)
         requires CCacheValid(ccache)
-        requires forall k :: k in ccache ==> k in icache
-        requires DependencyValid(deps)
-        requires forall k :: k in deps ==> k in icache && k in ccache
-        ensures ICacheValid(c.0)
-        ensures CCacheValid(c.1)
+        requires forall k :: k in Keys_domain ==> k in ccache
+        requires MetaValid(m)
+        requires !VCHappendsBefore(m.vc, ccache[m.key].vc) && !VCEq(ccache[m.key].vc, m.vc)
+        ensures  VCHappendsBefore(m.vc, InsertIntoCCache(ccache, m)[m.key].vc) || VCEq(InsertIntoCCache(ccache, m)[m.key].vc, m.vc)
     {
-        var domain := icache.Keys + deps.Keys;
-        var todos := GetDeps(icache, deps, {}, domain);
-        assert forall kv :: kv in todos ==> kv.0 in icache;
-        var merged := MergeTodos(todos, map[]);
-        assert forall k :: k in merged ==> exists kv :: kv in todos && kv.0 == k;
-        assert forall k :: k in merged ==> k in icache;
-        PullTodos(icache, ccache, merged)
+
     }
+
+    lemma lemma_DomainRemains(icache:ICache, ccache:CCache, icache':ICache, ccache':CCache)
+        requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+        requires forall k :: k in icache ==> k in icache'
+        requires forall k :: k in ccache ==> k in ccache'
+        ensures forall k :: k in Keys_domain ==> k in icache' && k in ccache'
+    {
+
+    }
+
+    // function PullDeps(icache:ICache, ccache:CCache, deps:Dependency) : (c:(ICache, CCache))
+    //     requires ICacheValid(icache)
+    //     requires CCacheValid(ccache)
+    //     requires forall k :: k in ccache ==> k in icache
+    //     requires DependencyValid(deps)
+    //     requires forall k :: k in deps ==> k in icache && k in ccache
+    //     ensures ICacheValid(c.0)
+    //     ensures CCacheValid(c.1)
+    // {
+    //     var domain := icache.Keys + deps.Keys;
+    //     var todos := GetDeps(icache, deps, {}, domain);
+    //     assert forall kv :: kv in todos ==> kv.0 in icache;
+    //     var merged := MergeTodos(todos, map[]);
+    //     assert forall k :: k in merged ==> exists kv :: kv in todos && kv.0 == k;
+    //     assert forall k :: k in merged ==> k in icache;
+    //     PullTodos(icache, ccache, merged)
+    // }
 
 
 
@@ -332,7 +402,7 @@ module CausalMesh_Cache_i {
     function PullDeps2(icache:ICache, ccache:CCache, deps:Dependency) : (c:(ICache, CCache))
         requires ICacheValid(icache)
         requires CCacheValid(ccache)
-        requires forall k :: k in Keys_domain ==> k in icache
+        requires forall k :: k in Keys_domain ==> k in icache && k in ccache
         requires forall k :: k in ccache ==> k in icache
         requires DependencyValid(deps)
         requires forall k :: k in deps ==> k in icache // && k in ccache
@@ -345,8 +415,19 @@ module CausalMesh_Cache_i {
         var domain := icache.Keys + deps.Keys;
         var todos := GetDeps2(icache, deps, map[], domain);
         assert forall k :: k in deps ==> k in todos && (VCHappendsBefore(deps[k], todos[k]) || VCEq(deps[k], todos[k]));
-        PullTodos(icache, ccache, todos)
+        lemma_GetDeps2AreMet(icache, ccache, todos);
+        var res := PullTodos(icache, ccache, todos);
+        assert ReadsDepsAreMet(res.0, res.1, todos);
+        assert UponReadsDepsAreMet(res.1, deps);
+        res
     }
+
+    lemma {:axiom} lemma_GetDeps2AreMet(icache:ICache, ccache:CCache, todos:Dependency)
+        requires ICacheValid(icache)
+        requires CCacheValid(ccache)
+        requires DependencyValid(todos)
+        requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+        ensures ReadsDepsAreMet(icache, ccache, todos)
 
 
     function FoldMetaIntoICache(icache: ICache, metas: set<Meta>): ICache
@@ -382,7 +463,7 @@ module CausalMesh_Cache_i {
                 (VCHappendsBefore(ccache[k].deps[kk], ccache[kk].vc) || VCEq(ccache[k].deps[kk], ccache[kk].vc))
     }
 
-    predicate ReadsDepsAreMet(icache:ICache, ccache:CCache, deps:Dependency)
+    predicate ReadsDepsAreMet2(icache:ICache, ccache:CCache, deps:Dependency)
         requires ICacheValid(icache)
         requires CCacheValid(ccache)
         requires forall k :: k in Keys_domain ==> k in icache && k in ccache
@@ -391,6 +472,19 @@ module CausalMesh_Cache_i {
         forall k :: k in deps ==> 
             var m := FoldMetaSet(ccache[k], icache[k], icache.Keys);
             VCEq(deps[k], m.vc) || VCHappendsBefore(deps[k], m.vc)
+    }
+
+    predicate ReadsDepsAreMet(icache:ICache, ccache:CCache, deps:Dependency)
+        requires ICacheValid(icache)
+        requires CCacheValid(ccache)
+        requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+        requires DependencyValid(deps)
+    {
+        forall k :: k in deps ==> 
+            (VCEq(deps[k], ccache[k].vc) || VCHappendsBefore(deps[k], ccache[k].vc))
+            || exists m :: m in icache[k] && m.vc == deps[k]
+            // var m := FoldMetaSet(ccache[k], icache[k], icache.Keys);
+            // VCEq(deps[k], m.vc) || VCHappendsBefore(deps[k], m.vc)
     }
 
     predicate UponReadsDepsAreMet(ccache:CCache, deps:Dependency)
