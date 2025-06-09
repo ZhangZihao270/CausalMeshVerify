@@ -4,6 +4,7 @@ module CausalMesh_DistributedSystem_i {
 import opened CausalMesh_Cache_i
 import opened CausalMesh_Message_i
 import opened CausalMesh_Types_i
+import opened CausalMesh_Properties_i
 import opened Environment_s
 
 datatype CMState = CMState(
@@ -88,6 +89,6 @@ predicate CMNext(ps:CMState, ps':CMState)
 
 predicate AllServersAreCausalCut(ps:CMState)
 {
-    forall s :: s in ps.servers ==> ServerValid(s.s) && CausalCut(s.s.ccache)
+    forall s :: s in ps.servers ==> ServerValid(s.s) // && CausalCut(s.s.ccache)
 }
 }

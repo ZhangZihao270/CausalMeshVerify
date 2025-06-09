@@ -8,6 +8,7 @@ import opened CausalMesh_Message_i
 import opened CausalMesh_Types_i
 import opened Environment_s
 import opened CausalMesh_DistributedSystem_i
+// import opened CausalMesh_Properties_i
 import opened Temporal__Temporal_s
 import opened Temporal__Rules_i
 import opened Temporal__Heuristics_i

@@ -68,12 +68,12 @@ module CausalMesh_Test_i {
                     && forall kk :: kk in todos[k].deps ==> 
                         VCHappendsBefore(todos[k].deps[kk], todos[k].vc) || VCEq(todos[k].deps[kk], todos[k].vc)
         requires forall k :: k in todos ==> 
-                    forall kk :: kk in todos[k].deps ==> kk in todos
+                    forall kk :: kk in todos[k].deps ==> kk in todos && (VCHappendsBefore(todos[k].deps[kk], todos[kk].vc) || VCEq(todos[k].deps[kk], todos[kk].vc))
         requires MetaValid(m)
-        requires forall k :: k in m.deps ==> k in todos
+        requires forall k :: k in m.deps ==> k in todos && (VCHappendsBefore(m.deps[k], todos[k].vc) || VCEq(m.deps[k], todos[k].vc))
         ensures var res := AddMetaToMetaMap(todos, m);
                 forall k :: k in res ==> 
-                    forall kk :: kk in res[k].deps ==> kk in res
+                    forall kk :: kk in res[k].deps ==> kk in res && (VCHappendsBefore(res[k].deps[kk], res[kk].vc) || VCEq(res[k].deps[kk], res[kk].vc))
     {
 
     }
@@ -112,11 +112,13 @@ module CausalMesh_Test_i {
         decreases |icache.Values|, |deps|
     {
         if |deps| == 0 then 
+            // lemma_MetaMapIsCausalCut(todos);
             todos
         else 
             var k :| k in deps;
             var new_deps := RemoveElt(deps, k);
             if k in todos && (VCHappendsBefore(deps[k], todos[k].vc) || VCEq(deps[k], todos[k].vc)) then 
+                // lemma_MetaMapIsCausalCut(todos);
                 var res := GetMetasOfAllDeps(icache, new_deps, todos, domain);
                 res
             else 
@@ -139,6 +141,7 @@ module CausalMesh_Test_i {
                     lemma_MapRemoveSubsetOfTheValOfKey(icache, k, metas);
                     assert |new_cache.Values| < |icache.Values|;
                     // assert k in todos';
+                    // lemma_MetaMapIsCausalCut(todos);
 
                     var res := GetMetasOfAllDeps(new_cache, merged.deps, todos, domain);
                     lemma_MetaMapIsCausalCut(res);
@@ -146,17 +149,20 @@ module CausalMesh_Test_i {
                         forall kk :: kk in res[k].deps ==>
                             kk in res;
                     var todos' := AddMetaToMetaMap(res, meta);
-                    assert forall kk :: kk in merged.deps ==> kk in res;// && (VCHappendsBefore(merged.deps[k], res[k].vc) || VCEq(merged.deps[k], res[k].vc));
-                    assert merged.deps == meta.deps;
-                    lemma_AddMetaToMetaMap(res, meta);
-                    lemma_MetaMapIsCausalCut(todos');
-                    assert forall k :: k in todos' ==>
-                            forall kk :: kk in todos'[k].deps ==>
-                                kk in todos';
-                    assert forall kk :: kk in todos ==> kk in todos' && (VCHappendsBefore(todos[kk].vc, todos'[kk].vc) || VCEq(todos[kk].vc, todos'[kk].vc));
-                    assert k in todos' && (VCHappendsBefore(deps[k], todos'[k].vc) || VCEq(deps[k], todos'[k].vc));
+                    assert forall kk :: kk in merged.deps ==> kk in res && (VCHappendsBefore(merged.deps[kk], res[kk].vc) || VCEq(merged.deps[kk], res[kk].vc));
+                    // assert merged.deps == meta.deps;
+                    // lemma_AddMetaToMetaMap(res, meta);
+                    // lemma_MetaMapIsCausalCut(todos');
+                    // assert forall k :: k in todos' ==>
+                    //         forall kk :: kk in todos'[k].deps ==>
+                    //             kk in todos';
+                    // assert forall kk :: kk in todos ==> kk in todos' && (VCHappendsBefore(todos[kk].vc, todos'[kk].vc) || VCEq(todos[kk].vc, todos'[kk].vc));
+                    // assert k in todos' && (VCHappendsBefore(deps[k], todos'[k].vc) || VCEq(deps[k], todos'[k].vc));
 
                     var res' := GetMetasOfAllDeps(icache, new_deps, todos', domain);
+                    // assert forall k :: k in res' ==>
+                    //         forall kk :: kk in res'[k].deps ==>
+                    //             kk in res';
                     res'
                 else 
                     var initial := EmptyMeta(k);
@@ -171,6 +177,9 @@ module CausalMesh_Test_i {
                             kk in todos';
                     assert forall kk :: kk in todos ==> kk in todos' && (VCHappendsBefore(todos[kk].vc, todos'[kk].vc) || VCEq(todos[kk].vc, todos'[kk].vc));
                     var res := GetMetasOfAllDeps(icache, new_deps, todos', domain);
+                    // assert forall k :: k in res ==>
+                    //         forall kk :: kk in res[k].deps ==>
+                    //             kk in res;
                     res
     }
 

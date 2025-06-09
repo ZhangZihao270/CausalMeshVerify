@@ -8,6 +8,7 @@ import opened CausalMesh_Message_i
 import opened CausalMesh_Types_i
 import opened Environment_s
 import opened CausalMesh_DistributedSystem_i
+import opened CausalMesh_Properties_i
 import opened CausalMesh_Proof_Actions_i
 import opened Temporal__Temporal_s
 import opened CausalMesh_proof_Assumptions_i
@@ -24,7 +25,7 @@ function {:opaque} ConvertBehaviorSeqToImap<T>(s:seq<T>):imap<int, T>
   imap i {:trigger s[i]} :: if i < 0 then s[0] else if 0 <= i < |s| then s[i] else last(s)
 }
 
-lemma lemma_AllServersAreCausalSet(
+lemma lemma_AllServersAreCausalCutAtAnyTime(
     low_level_behavior:seq<CMState>
 )
     requires |low_level_behavior| > 0 
@@ -36,49 +37,48 @@ lemma lemma_AllServersAreCausalSet(
     assert AllServersAreCausalCut(low_level_behavior[0]);
 
     var b := ConvertBehaviorSeqToImap(low_level_behavior);
-    lemma_AllServersAreCausalSetPrefix(b, |low_level_behavior|-1);
+    lemma_AllServersAreCausalCutPrefix(b, |low_level_behavior|-1);
 }
 
-// lemma lemma_AllServersAreCausalSetPrefix(
-//     b:Behavior<CMState>,
-//     i:int
-// )
-//     requires 0 <= i 
-//     requires IsValidBehaviorPrefix(b, i)
-//     requires AllServersAreCausalCut(b[0])
-//     ensures forall j :: 0 <= j <= i ==> AllServersAreCausalCut(b[j])
-// {
-//     if i == 0 {
-//         return;
-//     }
+lemma lemma_AllServersAreCausalCutPrefix(
+    b:Behavior<CMState>,
+    i:int
+)
+    requires 0 <= i 
+    requires IsValidBehaviorPrefix(b, i)
+    requires AllServersAreCausalCut(b[0])
+    ensures forall j :: 0 <= j <= i ==> AllServersAreCausalCut(b[j])
+    decreases i
+{
+    if i == 0 {
+        return;
+    }
 
-//     lemma_ConstantsAllConsistent(b, i-1);
-//     lemma_ConstantsAllConsistent(b, i);
+    lemma_ConstantsAllConsistent(b, i-1);
+    lemma_ConstantsAllConsistent(b, i);
 
-//     lemma_AllServersAreCausalSetPrefix(b, i-1);
-//     assert forall j :: 0 <= j < i ==> AllServersAreCausalCut(b[j]);
+    lemma_AllServersAreCausalCutPrefix(b, i-1);
+    assert forall j :: 0 <= j <= i - 1 ==> AllServersAreCausalCut(b[j]);
 
-//     lemma_CMNextRemainsCausalCut(b, i-1);
-//     assert AllServersAreCausalCut(b[i]);
-// }
+    lemma_CMNextRemainsCausalCut(b, i-1);
+    assert AllServersAreCausalCut(b[i]);
+    lemma_BehaviorPrefixIsCausalCut(b, i);
+    assert forall j :: 0 <= j <= i ==> AllServersAreCausalCut(b[j]);
+}
 
-// lemma lemma_CMNextRemainsCausalCut(low_level_behavior:seq<CMState>, i:int)
-//     requires |low_level_behavior| > 1
-//     requires 0 <= i < |low_level_behavior| - 1
-//     requires CMNext(low_level_behavior[i], low_level_behavior[i+1])
-//     requires AllServersAreCausalCut(low_level_behavior[i])
-//     // ensures AllServersAreCausalCut(low_level_behavior[i+1])
-// {
-//     var ps := low_level_behavior[i];
-//     var ps' := low_level_behavior[i+1];
+lemma lemma_BehaviorPrefixIsCausalCut(
+    b:Behavior<CMState>,
+    i:int
+)
+    requires 0 <= i 
+    requires IsValidBehaviorPrefix(b, i)
+    requires forall j :: 0 <= j < i ==> AllServersAreCausalCut(b[j])
+    requires AllServersAreCausalCut(b[i])
+    ensures forall j :: 0 <= j <= i ==> AllServersAreCausalCut(b[j])
+{
 
-//     if ps.servers == ps'.servers {
-//         assert AllServersAreCausalCut(ps');
-//     } 
-//     // else {
-//     //     assume AllServersAreCausalCut(ps');
-//     // }
-// }
+}
+
 
 lemma lemma_CMNextRemainsCausalCut(b:Behavior<CMState>, i:int)
     requires IsValidBehaviorPrefix(b, i+1)
@@ -126,7 +126,7 @@ lemma lemma_CMNextServerRemainsCausalCut(b:Behavior<CMState>, i:int, idx:int)
 
     if p.msg.Message_Read? {
         assert ReceiveRead(s, s', p, sp);
-        lemma_PullDeps2RemainsCausalCut(s.icache, s.ccache, p.msg.deps_read);
+        // lemma_PullDeps2RemainsCausalCut(s.icache, s.ccache, p.msg.deps_read);
         assert CausalCut(s'.ccache);
     } 
     else 
@@ -140,13 +140,65 @@ lemma lemma_CMNextServerRemainsCausalCut(b:Behavior<CMState>, i:int, idx:int)
         if s.next == p.msg.start {
             var deps := set x | x in p.msg.metas :: x.deps;
             var new_deps := FoldDependency(map[], deps);
-            lemma_PullDeps2RemainsCausalCut(s.icache, s.ccache, new_deps);
+            // lemma_PullDeps2RemainsCausalCut(s.icache, s.ccache, new_deps);
         }
         
         assert CausalCut(s'.ccache);
     }
  
 }
+
+// lemma lemma_ProcessReadRemainsCausalCut(s:Server, s':Server, p:Packet, sp:seq<Packet>)
+//     requires p.msg.Message_Read?
+//     requires ServerValid(s)
+//     requires PacketValid(p) 
+//     requires ReceiveRead(s, s', p, sp)
+//     ensures ServerValid(s')
+// {
+
+// }
+
+// lemma lemma_AllServersAreCausalSetPrefix(
+//     b:Behavior<CMState>,
+//     i:int
+// )
+//     requires 0 <= i 
+//     requires IsValidBehaviorPrefix(b, i)
+//     requires AllServersAreCausalCut(b[0])
+//     ensures forall j :: 0 <= j <= i ==> AllServersAreCausalCut(b[j])
+//     decreases i
+// {
+//     if i == 0 {
+//         return;
+//     }
+
+//     lemma_ConstantsAllConsistent(b, i-1);
+//     lemma_ConstantsAllConsistent(b, i);
+
+//     lemma_AllServersAreCausalSetPrefix(b, i-1);
+//     assume forall j :: 0 <= j < i ==> AllServersAreCausalCut(b[j]);
+
+//     lemma_CMNextRemainsCausalCut(b, i-1);
+//     assert AllServersAreCausalCut(b[i]);
+// }
+
+// lemma lemma_CMNextRemainsCausalCut(low_level_behavior:seq<CMState>, i:int)
+//     requires |low_level_behavior| > 1
+//     requires 0 <= i < |low_level_behavior| - 1
+//     requires CMNext(low_level_behavior[i], low_level_behavior[i+1])
+//     requires AllServersAreCausalCut(low_level_behavior[i])
+//     // ensures AllServersAreCausalCut(low_level_behavior[i+1])
+// {
+//     var ps := low_level_behavior[i];
+//     var ps' := low_level_behavior[i+1];
+
+//     if ps.servers == ps'.servers {
+//         assert AllServersAreCausalCut(ps');
+//     } 
+//     // else {
+//     //     assume AllServersAreCausalCut(ps');
+//     // }
+// }
 
 // function PullTodos2(icache:ICache, ccache:CCache, todos:Dependency) : (c:(ICache, CCache))
 //     requires ICacheValid(icache)
