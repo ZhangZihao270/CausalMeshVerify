@@ -358,6 +358,8 @@ module CausalMesh_Cache_i {
                     // var todos' := DependencyInsertOrMerge(todos, k, merged.vc);
                     var todos' := DependencyInsertOrMerge(todos, k, deps[k]); // this is different from TLA+ spec
 
+                    assert forall kk :: kk in todos ==> kk in todos' && (VCHappendsBefore(todos[kk], todos'[kk]) || VCEq(todos[kk], todos'[kk]));
+
                     // assert VCHappendsBefore(todos'[k], deps[k]) || VCEq(todos'[k], deps[k]);
 
                     // var new_cache := RemoveElt(icache, k); // is this right?
@@ -391,6 +393,7 @@ module CausalMesh_Cache_i {
                     var todos' := DependencyInsertOrMerge(todos, k, deps[k]);
                     var res := GetDeps2(icache, new_deps, todos', domain);
                     assert forall kk :: kk in new_deps ==> kk in res;
+                    assert forall kk :: kk in todos ==> kk in res && (VCHappendsBefore(todos[kk], res[kk]) || VCEq(todos[kk], res[kk]));
                     assert k in todos' && (VCHappendsBefore(deps[k], res[k]) || VCEq(deps[k], todos'[k]));
                     assert forall kk :: kk in todos' ==> kk in res;
                     assert forall kk :: kk in deps ==> kk in res && (VCHappendsBefore(deps[k], res[k]) || VCEq(deps[k], res[k]));
@@ -455,7 +458,8 @@ module CausalMesh_Cache_i {
     /** Key Properties */
 
     predicate CausalCut(ccache: CCache)
-        requires CCacheValid(ccache)
+        // requires CCacheValid(ccache)
+        requires forall k :: k in ccache ==> MetaValid(ccache[k])
     {
         forall k :: k in ccache ==>
             forall kk :: kk in ccache[k].deps ==>

@@ -137,6 +137,7 @@ module CausalMesh_Types_i {
         && m.key in Keys_domain
         && VectorClockValid(m.vc)
         && DependencyValid(m.deps)
+        && forall k :: k in m.deps ==> VCHappendsBefore(m.deps[k], m.vc) || VCEq(m.deps[k], m.vc)
     }
 
     predicate MetaEq(m1:Meta, m2:Meta)
@@ -169,7 +170,8 @@ module CausalMesh_Types_i {
         requires forall kk :: kk in acc.deps ==> kk in domain
         requires forall m :: m in metas ==> MetaValid(m) && m.key == acc.key && (forall kk :: kk in m.deps ==> kk in domain)
         ensures MetaValid(res)
-        ensures forall kk :: kk in res.deps ==> kk in domain
+        ensures res.key == acc.key
+        ensures forall kk :: kk in res.deps ==> kk in domain && (VCHappendsBefore(res.deps[kk], res.vc) || VCEq(res.deps[kk], res.vc))
         decreases |metas|
     {
         if |metas| == 0 then
