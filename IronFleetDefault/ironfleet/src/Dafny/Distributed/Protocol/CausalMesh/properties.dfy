@@ -38,14 +38,26 @@ module CausalMesh_Properties_i {
     {
         forall k :: k in deps ==> 
             (VCEq(deps[k], ccache[k].vc) || VCHappendsBefore(deps[k], ccache[k].vc))
-            || exists m :: m in icache[k] && m.vc == deps[k]
+            || (exists m :: m in icache[k] && m.vc == deps[k])
             // var m := FoldMetaSet(ccache[k], icache[k], icache.Keys);
             // VCEq(deps[k], m.vc) || VCHappendsBefore(deps[k], m.vc)
     }
 
+    predicate ReadsDepsAreMet1(icache:ICache, ccache:CCache, deps:map<Key, Meta>)
+        requires ICacheValid(icache)
+        requires CCacheValid(ccache)
+        requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+        requires forall k :: k in deps ==> k in Keys_domain && MetaValid(deps[k])
+    {
+        forall k :: k in deps ==> 
+            (VCEq(deps[k].vc, ccache[k].vc) || VCHappendsBefore(deps[k].vc, ccache[k].vc))
+            || (exists m :: m in icache[k] && m.vc == deps[k].vc)
+    }
+
     predicate UponReadsDepsAreMet(ccache:CCache, deps:Dependency)
         requires CCacheValid(ccache)
-        requires forall k :: k in Keys_domain ==> k in ccache
+        // requires forall k :: k in Keys_domain ==> k in ccache
+        requires forall k :: k in deps ==> k in ccache
         requires DependencyValid(deps)
     {
         forall k :: k in deps ==> 
@@ -68,4 +80,48 @@ module CausalMesh_Properties_i {
         //     else
         //         c2[k]
     }
+
+    lemma lemma_MergeCCacheEnsuresReadDepsAreMet(icache:ICache, c1:CCache, todos:map<Key, Meta>)
+        requires CCacheValid(c1)
+        requires CCacheValid(todos)
+        requires ICacheValid(icache)
+        requires forall k :: k in Keys_domain ==> k in icache && k in c1
+        requires forall k :: k in todos ==> k in Keys_domain && MetaValid(todos[k])
+        // requires CausalCut(c1)
+        // requires CausalCut(c2)
+        requires ReadsDepsAreMet1(icache, c1, todos)
+        ensures CCacheValid(MergeCCache(c1,todos))
+        // ensures CausalCut(MergeCCache(c1,c2))
+        ensures ReadsDepsAreMet1(icache, MergeCCache(c1,todos), todos)
+        ensures var res := MergeCCache(c1, todos);
+                && (forall k :: k in c1 ==> k in res && (VCHappendsBefore(c1[k].vc, res[k].vc) || VCEq(c1[k].vc, res[k].vc)))
+                && (forall k :: k in todos ==> k in res && (VCHappendsBefore(todos[k].vc, res[k].vc) || VCEq(todos[k].vc, res[k].vc)))
+    {
+        // map k | k in c1.Keys + c2.Keys ::
+        //     if k in c1 && k in c2 then
+        //         MetaMerge(c1[k], c2[k])
+        //     else if k in c1 then
+        //         c1[k]
+        //     else
+        //         c2[k]
+    }
+
+    lemma lemma_MergeCCacheEnsuresUponReadDepsAreMet(icache:ICache, ccache:CCache, todos:map<Key, Meta>, deps:Dependency)
+        requires CCacheValid(ccache)
+        requires CCacheValid(todos)
+        requires ICacheValid(icache)
+        requires DependencyValid(deps)
+        requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+        requires forall k :: k in deps ==> k in todos
+        requires forall k :: k in todos ==> k in Keys_domain && MetaValid(todos[k])
+        requires UponReadsDepsAreMet(todos, deps)
+        ensures var res := MergeCCache(ccache, todos);
+                && (forall k :: k in ccache ==> k in res && (VCHappendsBefore(ccache[k].vc, res[k].vc) || VCEq(ccache[k].vc, res[k].vc)))
+                && (forall k :: k in todos ==> k in res && (VCHappendsBefore(todos[k].vc, res[k].vc) || VCEq(todos[k].vc, res[k].vc)))
+                && UponReadsDepsAreMet(res, deps)
+    {
+
+    }
+
+
 }
