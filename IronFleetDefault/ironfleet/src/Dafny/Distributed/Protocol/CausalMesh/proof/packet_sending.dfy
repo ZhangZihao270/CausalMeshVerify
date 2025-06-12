@@ -1,0 +1,86 @@
+include "../distributed_system.dfy"
+include "../../../Common/Logic/Temporal/Rules.i.dfy"
+include "action.dfy"
+
+module CausalMesh_Proof_PacketSending_i {
+import opened CausalMesh_Cache_i
+import opened CausalMesh_Message_i
+import opened CausalMesh_Types_i
+import opened Environment_s
+import opened CausalMesh_DistributedSystem_i
+import opened CausalMesh_Properties_i
+import opened Temporal__Temporal_s
+import opened Collections__Maps2_s
+import opened CausalMesh_Proof_Constants_i
+import opened CausalMesh_proof_Assumptions_i
+
+lemma lemma_ActionThatSendsReadReplyIsServerReceiveRead(
+    ps:CMState,
+    ps':CMState,
+    p:Packet
+) returns (
+    idx:int,
+    ios:seq<CMIo>
+)
+    requires 0 <= p.src < Nodes
+    requires p.msg.Message_Read_Reply?
+    requires p in ps'.environment.sentPackets
+    requires p !in ps.environment.sentPackets
+    requires CMNext(ps, ps')
+    ensures 0 <= idx < Nodes
+    ensures CMNextServer(ps, ps', idx, ios)
+    ensures |ios| > 0
+    ensures ios[0].LIoOpReceive?
+    ensures ios[0].r.msg.Message_Read?
+    ensures LIoOpSend(p) in ios
+    ensures ReceiveRead(ps.servers[idx].s, ps'.servers[idx].s, ios[0].r, [p])
+{
+    assert ps.environment.nextStep.LEnvStepHostIos?;
+    assert LIoOpSend(p) in ps.environment.nextStep.ios;
+    idx, ios :| CMNextServer(ps, ps', idx, ios) && LIoOpSend(p) in ios;
+
+    assert CMNextServer(ps, ps', idx, ios);
+    assert LServerNext(ps.servers[idx], ps'.servers[idx], ios);
+    assert ServerNextProcessPacket(ps.servers[idx].s, ps'.servers[idx].s, ios);
+    assert ServerValid(ps.servers[idx].s);
+    assert |ios| >= 1;
+    assert !ios[0].LIoOpTimeoutReceive?;
+    assert ios[0].LIoOpReceive?;
+    assert PacketValid(ios[0].r);
+    if ios[0].r.msg.Message_Read? || ios[0].r.msg.Message_Write? || ios[0].r.msg.Message_Propagation?{
+        assert ServerProcessPacket(ps.servers[idx].s, ps'.servers[idx].s, ios);
+        assert ios[0].r.msg.Message_Read?;
+    } 
+    else {
+        assert |ios| == 1;
+        var sent_packets := ExtractSentPacketsFromIos(ios);
+        assert sent_packets == [];
+        assert false;
+    }
+}
+
+
+
+lemma lemma_ActionThatSendsReadIsClientSendRead(
+    ps:CMState,
+    ps':CMState,
+    p:Packet
+) returns (
+    idx:int,
+    ios:seq<CMIo>
+)
+    requires Nodes <= p.src < Nodes + Clients
+    requires p.msg.Message_Read_Reply?
+    requires p in ps'.environment.sentPackets
+    requires p !in ps.environment.sentPackets
+    requires CMNext(ps, ps')
+    ensures 0 <= idx < Clients
+    ensures CMNextClient(ps, ps', idx, ios)
+    ensures LIoOpSend(p) in ios
+    ensures SendRead(ps.clients[idx].c, ps'.clients[idx].c, [p])
+{
+    assert ps.environment.nextStep.LEnvStepHostIos?;
+    assert LIoOpSend(p) in ps.environment.nextStep.ios;
+    idx, ios :| CMNextClient(ps, ps', idx, ios) && LIoOpSend(p) in ios;
+}
+}

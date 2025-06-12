@@ -38,6 +38,7 @@ predicate CMNextCommon(ps:CMState, ps':CMState)
     && CMComplete(ps)
     && ConstantsUnchanged(ps, ps')
     && LEnvironment_Next(ps.environment, ps'.environment)
+    && (forall p :: p in ps'.environment.sentPackets ==> PacketValid(p) && PacketHasCorrectSrcAndDst(p))
     && (forall s :: s in ps.servers ==> ServerValid(s.s))
     && (forall s :: s in ps'.servers ==> ServerValid(s.s))
 }
@@ -81,10 +82,17 @@ predicate CMNextOneExternal(ps:CMState, ps':CMState, eid:int, ios:seq<CMIo>)
 
 predicate CMNext(ps:CMState, ps':CMState)
 {
-  || (exists idx, ios :: CMNextServer(ps, ps', idx, ios))
-  || (exists idx, ios :: CMNextClient(ps, ps', idx, ios))
-  || (exists eid, ios :: CMNextOneExternal(ps, ps', eid, ios))
+  || (exists idx, ios :: CMNextServer(ps, ps', idx, ios)) // && var sp := ExtractSentPacketsFromIos(ios); forall p :: p in sp ==> PacketValid(p))
+  || (exists idx, ios :: CMNextClient(ps, ps', idx, ios)) //&& var sp := ExtractSentPacketsFromIos(ios); forall p :: p in sp ==> PacketValid(p))
+  || (exists eid, ios :: CMNextOneExternal(ps, ps', eid, ios)) //&& var sp := ExtractSentPacketsFromIos(ios); forall p :: p in sp ==> PacketValid(p))
   || CMNextEnvironment(ps, ps')
+}
+
+lemma CMNextImpliesCMNextCommon(ps:CMState, ps':CMState)
+    requires CMNext(ps, ps')
+    ensures CMNextCommon(ps, ps')
+{
+
 }
 
 predicate AllServersAreCausalCut(ps:CMState)

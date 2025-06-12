@@ -38,9 +38,9 @@ module CausalMesh_PullDeps_i {
 
     }
 
-    lemma {:axiom} lemma_MetaMapIsCausalCut(metas:map<Key,Meta>)
-        requires forall k :: k in metas ==> MetaValid(metas[k])
-        ensures CausalCut(metas)
+    // lemma {:axiom} lemma_MetaMapIsCausalCut(metas:map<Key,Meta>)
+    //     requires forall k :: k in metas ==> MetaValid(metas[k])
+    //     ensures CausalCut(metas)
 
     function GetMetasOfAllDeps(icache:ICache, deps:Dependency, todos:map<Key, Meta>, domain:set<Key>) : (res:map<Key, Meta>)
         requires forall k :: k in icache ==> k in Keys_domain && (forall m :: m in icache[k] ==> MetaValid(m) && m.key == k

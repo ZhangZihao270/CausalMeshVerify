@@ -666,7 +666,7 @@ module CausalMesh_Cache_i {
         && sp == []
     }
 
-    function {:opaque} ExtractSentPacketsFromIos(ios:seq<CMIo>) : seq<Packet>
+    function ExtractSentPacketsFromIos(ios:seq<CMIo>) : seq<Packet>
         ensures forall p :: p in ExtractSentPacketsFromIos(ios) <==> LIoOpSend(p) in ios
     {
         if |ios| == 0 then

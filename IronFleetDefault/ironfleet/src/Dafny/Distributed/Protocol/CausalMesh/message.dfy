@@ -33,4 +33,14 @@ module CausalMesh_Message_i {
     {
         && MessageValid(p.msg)
     }
+
+    predicate PacketHasCorrectSrcAndDst(p:Packet)
+    {
+        match p.msg 
+            case Message_Read(_,_) => 0 <= p.src < Clients && 0 <= p.dst < Nodes
+            case Message_Read_Reply(_,_,_) => 0 <= p.dst < Clients && 0 <= p.src < Nodes
+            case Message_Write(_,_,_) => 0 <= p.src < Clients && 0 <= p.dst < Nodes
+            case Message_Write_Reply(_,_) => 0 <= p.dst < Clients && 0 <= p.src < Nodes
+            case Message_Propagation(_,_,_) => 0 <= p.src < Nodes && 0 <= p.dst < Nodes
+    }
 }

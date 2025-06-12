@@ -33,7 +33,7 @@ import opened CausalMesh_proof_Assumptions_i
     ensures  CMNextServer(b[i], b[i+1], idx, ios)
   {
     lemma_AssumptionsMakeValidTransition(b, i);
-    lemma_ConstantsAllConsistent(b, i);
+    // lemma_ConstantsAllConsistent(b, i);
     assert CMNext(b[i], b[i+1]);
     ios :| CMNextServer(b[i], b[i+1], idx, ios);
   }

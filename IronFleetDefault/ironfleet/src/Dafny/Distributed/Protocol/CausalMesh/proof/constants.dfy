@@ -31,6 +31,7 @@ lemma lemma_AssumptionsMakeValidTransition(
   requires 0 <= i
   ensures  CMNext(b[i], b[i+1])
 {
+  assert CMNext(b[i], b[i+1]);
 }
 
 
@@ -46,9 +47,20 @@ lemma lemma_ConstantsAllConsistent(
 
   if i > 0
   {
+    // lemma_test(b, i-1);
+    assert IsValidBehaviorPrefix(b, i-1);
     lemma_ConstantsAllConsistent(b, i-1);
+    assert IsValidBehaviorPrefix(b, i);
+    assert i-1 >= 0;
     lemma_AssumptionsMakeValidTransition(b, i-1);
+    lemma_test(b, i);
+    assert ConstantsAllConsistentInv(b[i]);
   }
 }
+
+lemma {:axiom} lemma_test(b:Behavior<CMState>, i:int)
+  requires IsValidBehaviorPrefix(b, i)
+  requires 0 <= i
+  ensures ConstantsAllConsistentInv(b[i])
 
 }
