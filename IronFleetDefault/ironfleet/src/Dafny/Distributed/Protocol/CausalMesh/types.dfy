@@ -218,13 +218,18 @@ module CausalMesh_Types_i {
         requires VectorClockValid(acc)
         requires forall m :: m in vcs ==> VectorClockValid(m)
         ensures VectorClockValid(res)
+        ensures forall vc :: vc in vcs ==> VCHappendsBefore(vc, res) || VCEq(vc, res)
+        ensures VCHappendsBefore(acc, res) || VCEq(acc, res)
         decreases |vcs|
     {
         if |vcs| == 0 then
             acc
         else
             var x :| x in vcs;
-            FoldVC(VCMerge(acc, x), vcs - {x})
+            var merged := VCMerge(acc, x);
+            assert VCHappendsBefore(x, merged) || VCEq(x, merged);
+            var res := FoldVC(VCMerge(acc, x), vcs - {x});
+            res
     }
 
     function FoldDependency(acc: Dependency, deps: set<Dependency>) : (res:Dependency)
@@ -238,6 +243,19 @@ module CausalMesh_Types_i {
         else
             var x :| x in deps;
             FoldDependency(DependencyMerge(acc, x), deps - {x})
+    }
+
+    function FoldDependencyFromMetaSet(acc: Dependency, metas: set<Meta>) : (res:Dependency)
+        requires DependencyValid(acc)
+        requires forall m :: m in metas ==> MetaValid(m)
+        ensures DependencyValid(res)
+        decreases |metas|
+    {
+        if |metas| == 0 then
+            acc
+        else
+            var x :| x in metas;
+            FoldDependencyFromMetaSet(DependencyMerge(acc, x.deps), metas - {x})
     }
 
     lemma {:axiom} lemma_MapRemoveSubsetOfTheValOfKey<K,V>(m:map<K,set<V>>, k:K, s:set<V>)

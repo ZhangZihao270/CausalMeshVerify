@@ -19,7 +19,7 @@ module CausalMesh_Message_i {
             // case Message_Invalid() => true
             case Message_Read(key_read, deps_read) => key_read in Keys_domain && DependencyValid(deps_read)
             case Message_Read_Reply(key_rreply, vc_rreply, deps_rreply) => key_rreply in Keys_domain && VectorClockValid(vc_rreply) && DependencyValid(deps_rreply)
-            case Message_Write(key_write, deps_write, local) => key_write in Keys_domain && DependencyValid(deps_write)
+            case Message_Write(key_write, deps_write, local) => key_write in Keys_domain && DependencyValid(deps_write) && (forall k :: k in local ==> MetaValid(local[k]))
             case Message_Write_Reply(key_wreply, vc_wreply/*, deps_wreply*/) => key_wreply in Keys_domain && VectorClockValid(vc_wreply) // && DependencyValid(deps_wreply)
             case Message_Propagation(key, metas, start) => key in Keys_domain && forall m :: m in metas ==> MetaValid(m) && 0 <= start < Nodes
     }

@@ -448,6 +448,7 @@ module CausalMesh_Cache_i {
         ensures forall k :: k in ccache ==> k in c.1
         ensures CausalCut(c.1)
     {
+        // assume AllVersionsInCCacheAreMetInICache(icache, ccache);
         var domain := icache.Keys + deps.Keys;
         var todos := GetMetasOfAllDeps(icache, deps, map[], domain);
         assert forall k :: k in deps ==> k in todos && (VCHappendsBefore(deps[k], todos[k].vc) || VCEq(deps[k], todos[k].vc));
@@ -455,11 +456,14 @@ module CausalMesh_Cache_i {
         // lemma_CacheIsCausalCut(todos);
         // assert CCacheValid(todos);
         assert UponReadsDepsAreMet(todos, deps);
+        // assume AllVersionsInCCacheAreMetInICache(icache, todos);
         var new_cache := MergeCCache(ccache, todos);
         lemma_MergeCCacheRemainsCausalCut(ccache, todos);
         lemma_MergeCCacheEnsuresUponReadDepsAreMet(icache, ccache, todos, deps);
-        // assert ReadsDepsAreMet1(icache, new_cache, todos);
+        assert ReadsDepsAreMet1(icache, new_cache, todos);
         assert UponReadsDepsAreMet(new_cache, deps);
+        // lemma_MergeCCacheEnsuresAllVersionsInCCacheAreMetInICache(icache, ccache, todos);
+        // assert AllVersionsInCCacheAreMetInICache(icache, new_cache);
         (icache, new_cache)
     }
 
@@ -562,20 +566,48 @@ module CausalMesh_Cache_i {
                     )]
     }
 
-    predicate ReceiveWrite(s:Server, s':Server, p:Packet, sp:seq<Packet>)
+    // predicate ReceiveWrite(s:Server, s':Server, p:Packet, sp:seq<Packet>)
+    //     requires p.msg.Message_Write?
+    //     requires ServerValid(s)
+    //     requires PacketValid(p)
+    // {
+    //     var new_vc := AdvanceVC(s.gvc, s.id);
+    //     var meta := Meta(p.msg.key_write, new_vc, p.msg.deps_write);
+    //     var local := set m | m in p.msg.local.Values;
+    //     var new_icache := s.icache[p.msg.key_write := s.icache[p.msg.key_write] + local + {meta}];
+    //     var wreply := LPacket(s.id, p.src, Message_Write_Reply(p.msg.key_write, new_vc));
+    //     var propagate := LPacket(s.id, s.next, Message_Propagation(p.msg.key_write, {meta}, s.id));
+    //     && s' == s.(gvc:=new_vc, icache := new_icache)
+    //     && sp == [wreply] + [propagate]
+    // }
+
+    predicate ReceiveWrite(s: Server, s': Server, p: Packet, sp: seq<Packet>)
         requires p.msg.Message_Write?
         requires ServerValid(s)
         requires PacketValid(p)
     {
-        var new_vc := AdvanceVC(s.gvc, s.id);
-        var meta := Meta(p.msg.key_write, new_vc, p.msg.deps_write);
-        var local := set m | m in p.msg.local.Values;
-        var new_icache := s.icache[p.msg.key_write := s.icache[p.msg.key_write] + local + {meta}];
+        assert forall k :: k in p.msg.local ==> MetaValid(p.msg.local[k]);
+        var local_metas := set m | m in p.msg.local.Values;
+        // assert forall m :: m in local_metas ==> MetaValid(m);
+        var vcs_local := set m | m in local_metas :: m.vc;
+        // assert forall vc :: vc in vcs ==> VectorClockValid(vc);
+        var vcs_deps := set k | k in p.msg.deps_write :: p.msg.deps_write[k];
+        var merged_vc := FoldVC(s.gvc, vcs_local);  // merge local VC
+        var merged_vc2 := FoldVC(merged_vc, vcs_deps);
+        var new_vc := AdvanceVC(merged_vc2, s.id);
+
+        var merged_deps := FoldDependencyFromMetaSet(p.msg.deps_write, local_metas);
+
+        var meta := Meta(p.msg.key_write, new_vc, merged_deps);
+        var new_icache := s.icache[p.msg.key_write := s.icache[p.msg.key_write] + local_metas + {meta}];
+
         var wreply := LPacket(s.id, p.src, Message_Write_Reply(p.msg.key_write, new_vc));
         var propagate := LPacket(s.id, s.next, Message_Propagation(p.msg.key_write, {meta}, s.id));
-        && s' == s.(gvc:=new_vc, icache := new_icache)
+
+        && s' == s.(gvc := new_vc, icache := new_icache)
         && sp == [wreply] + [propagate]
     }
+
 
 
     predicate ReceivePropagate(s:Server, s':Server, p:Packet, sp:seq<Packet>)

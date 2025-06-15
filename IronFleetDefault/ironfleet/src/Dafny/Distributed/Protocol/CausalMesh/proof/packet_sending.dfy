@@ -59,6 +59,33 @@ lemma lemma_ActionThatSendsReadReplyIsServerReceiveRead(
     }
 }
 
+lemma lemma_ActionThatSendsWriteReplyIsServerReceiveWrite(
+    ps:CMState,
+    ps':CMState,
+    p:Packet
+    // pp:Packet
+) returns (
+    idx:int,
+    ios:seq<CMIo>
+)
+    requires 0 <= p.src < Nodes
+    requires p.msg.Message_Write_Reply?
+    requires p in ps'.environment.sentPackets
+    requires p !in ps.environment.sentPackets
+    requires CMNext(ps, ps')
+    ensures 0 <= idx < Nodes
+    ensures CMNextServer(ps, ps', idx, ios)
+    ensures |ios| > 0
+    ensures ios[0].LIoOpReceive?
+    ensures ios[0].r.msg.Message_Write?
+    ensures LIoOpSend(p) in ios
+    ensures ReceiveWrite(ps.servers[idx].s, ps'.servers[idx].s, ios[0].r, ExtractSentPacketsFromIos(ios))
+{
+    assert ps.environment.nextStep.LEnvStepHostIos?;
+    assert LIoOpSend(p) in ps.environment.nextStep.ios;
+    idx, ios :| CMNextServer(ps, ps', idx, ios) && LIoOpSend(p) in ios;
+}
+
 
 
 lemma lemma_ActionThatSendsReadIsClientSendRead(

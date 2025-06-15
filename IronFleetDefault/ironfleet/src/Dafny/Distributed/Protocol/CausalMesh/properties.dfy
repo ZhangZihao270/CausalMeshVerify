@@ -63,6 +63,25 @@ module CausalMesh_Properties_i {
         forall k :: k in deps ==> 
             VCEq(deps[k], ccache[k].vc) || VCHappendsBefore(deps[k], ccache[k].vc)
     }
+
+    predicate DepsAreMetInICache(icache:ICache, deps:Dependency)
+        requires forall k :: k in Keys_domain ==> k in icache
+        requires DependencyValid(deps)
+    {
+        forall k :: k in deps ==>
+            exists m :: m in icache[k] && m.vc == deps[k]
+    }
+
+    predicate AllVersionsInCCacheAreMetInICache(icache:ICache, ccache:CCache)
+        requires forall k :: k in Keys_domain ==> k in icache
+        requires ICacheValid(icache)
+        requires CCacheValid(ccache)
+    {
+        && (forall k :: k in ccache ==> exists m :: m in icache[k] && ccache[k].vc == m.vc)
+        && (forall k :: k in ccache ==> 
+                forall kk :: kk in ccache[k].deps ==>
+                    exists m :: m in icache[k] && ccache[k].deps[kk] == m.vc)
+    }
     
     lemma lemma_MergeCCacheRemainsCausalCut(c1:CCache, c2:CCache)
         requires CCacheValid(c1)
@@ -103,7 +122,7 @@ module CausalMesh_Properties_i {
         //     else if k in c1 then
         //         c1[k]
         //     else
-        //         c2[k]
+        //        jfakj
     }
 
     lemma lemma_MergeCCacheEnsuresUponReadDepsAreMet(icache:ICache, ccache:CCache, todos:map<Key, Meta>, deps:Dependency)
@@ -122,6 +141,20 @@ module CausalMesh_Properties_i {
     {
 
     }
+
+    // lemma lemma_MergeCCacheEnsuresAllVersionsInCCacheAreMetInICache(icache:ICache, ccache:CCache, todos:map<Key, Meta>)
+    //     requires CCacheValid(ccache)
+    //     requires CCacheValid(todos)
+    //     requires ICacheValid(icache)
+    //     requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+    //     requires AllVersionsInCCacheAreMetInICache(icache, ccache)
+    //     requires AllVersionsInCCacheAreMetInICache(icache, todos)
+    //     // ensures AllVersionsInCCacheAreMetInICache(icache, MergeCCache(ccache, todos))
+    // {
+    //     var new_cache := MergeCCache(ccache, todos);
+    //     assert forall k :: k in ccache ==> exists m :: m in icache[k] && ccache[k].vc == m.vc;
+    //     assert forall k :: k in todos ==> exists m :: m in icache[k] && todos[k].vc == m.vc;
+    // }
 
 
 }

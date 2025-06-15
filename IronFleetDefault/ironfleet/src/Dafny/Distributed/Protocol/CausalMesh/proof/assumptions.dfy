@@ -21,4 +21,18 @@ predicate IsValidBehaviorPrefix(
   && (forall j {:trigger CMNext(b[j], b[j+1])} :: 0 <= j < i ==> CMNext(b[j], b[j+1]))
 }
 
+lemma lemma_BehaviorValidImpliesOneStepValid(
+    b:Behavior<CMState>,
+    i:int
+)
+    requires 0 < i
+    requires IsValidBehaviorPrefix(b, i)
+    ensures CMNext(b[i-1], b[i])
+{
+    ghost var j := i - 1;
+    assert 0 <= j < i;
+    assert j + 1 == i;
+    assert CMNext(b[j], b[j+1]);
+}
+
 }
