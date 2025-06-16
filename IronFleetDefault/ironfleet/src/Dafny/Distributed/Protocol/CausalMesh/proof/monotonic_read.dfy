@@ -22,7 +22,7 @@ import opened Collections__Seqs_s
 import opened Collections__Maps_i
 import opened Collections__Maps2_s
 
-lemma lemma_ReadReplyHasHigherVCThanDeps(
+lemma lemma_MonotonicRead(
     low_level_behavior:seq<CMState>
 )
     requires |low_level_behavior| > 0 
