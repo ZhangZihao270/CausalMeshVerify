@@ -559,6 +559,7 @@ module CausalMesh_Cache_i {
         && s' == s.(icache := new_icache, ccache := new_ccache)
         && sp == [LPacket(s.id, p.src, 
                         Message_Read_Reply(
+                            p.msg.opn_read,
                             p.msg.key_read,
                             new_ccache[p.msg.key_read].vc,
                             new_ccache[p.msg.key_read].deps
@@ -601,7 +602,7 @@ module CausalMesh_Cache_i {
         var meta := Meta(p.msg.key_write, new_vc, merged_deps);
         var new_icache := s.icache[p.msg.key_write := s.icache[p.msg.key_write] + local_metas + {meta}];
 
-        var wreply := LPacket(s.id, p.src, Message_Write_Reply(p.msg.key_write, new_vc));
+        var wreply := LPacket(s.id, p.src, Message_Write_Reply(p.msg.opn_write, p.msg.key_write, new_vc));
         var propagate := LPacket(s.id, s.next, Message_Propagation(p.msg.key_write, {meta}, s.id));
 
         && s' == s.(gvc := new_vc, icache := new_icache)
@@ -634,6 +635,7 @@ module CausalMesh_Cache_i {
     /** Client */
     datatype Client = Client(
         id : int,
+        opn : int,
         local : map<Key, Meta>,
         deps : Dependency
     )
@@ -648,6 +650,7 @@ module CausalMesh_Cache_i {
     predicate ClientInit(c:Client, id:int)
         requires Nodes <= id < Nodes + Clients
     {
+        && c.opn == 0
         && c.id == id
         && c.local == map[]
         && c.deps == map[]
@@ -659,18 +662,19 @@ module CausalMesh_Cache_i {
         var k :| 0 <= k < MaxKeys as int;
         
         if k in c.local then 
-            && c' == c
+            && c' == c.(opn := c.opn + 1)
             && sp == []
         else 
             var server :| 0 <= server < Nodes as int;
-            && c' == c
-            && sp == [LPacket(c.id, server, Message_Read(k, c.deps))]
+            && c' == c.(opn := c.opn + 1)
+            && sp == [LPacket(c.id, server, Message_Read(c.opn, k, c.deps))]
     }
 
     predicate ReceiveReadReply(c:Client, c':Client, p:Packet, sp:seq<Packet>)
         requires ClientValid(c)
         requires p.msg.Message_Read_Reply?
         requires PacketValid(p)
+        // requires p.msg.opn_rreply == c.opn
     {
         var m := Meta(p.msg.key_rreply, p.msg.vc_rreply, p.msg.deps_rreply);
 
@@ -683,8 +687,8 @@ module CausalMesh_Cache_i {
     {
         var k :| 0 <= k < MaxKeys as int;
         var server :| 0 <= server < Nodes as int;
-        && c' == c
-        && sp == [LPacket(c.id, server, Message_Write(k, c.deps, c.local))]
+        && c' == c.(opn := c.opn + 1)
+        && sp == [LPacket(c.id, server, Message_Write(c.opn + 1, k, c.deps, c.local))]
     }
 
     predicate ReceiveWriteReply(c:Client, c':Client, p:Packet, sp:seq<Packet>)
@@ -720,8 +724,8 @@ module CausalMesh_Cache_i {
         && (forall io :: io in ios[1..] ==> io.LIoOpSend?)
         && var sent_packets := ExtractSentPacketsFromIos(ios);
             match ios[0].r.msg 
-                case Message_Read(_,_) => ReceiveRead(s, s', ios[0].r, sent_packets)
-                case Message_Write(_,_,_) => ReceiveWrite(s, s', ios[0].r, sent_packets)
+                case Message_Read(_,_,_) => ReceiveRead(s, s', ios[0].r, sent_packets)
+                case Message_Write(_,_,_,_) => ReceiveWrite(s, s', ios[0].r, sent_packets)
                 case Message_Propagation(_,_,_) => ReceivePropagate(s, s', ios[0].r, sent_packets)
     }
 
@@ -784,8 +788,8 @@ module CausalMesh_Cache_i {
         && (forall io :: io in ios[1..] ==> io.LIoOpSend?)
         && var sent_packets := ExtractSentPacketsFromIos(ios);
             match ios[0].r.msg 
-                case Message_Read_Reply(_,_,_) => ReceiveReadReply(s, s', ios[0].r, sent_packets)
-                case Message_Write_Reply(_,_) => ReceiveWriteReply(s, s', ios[0].r, sent_packets)
+                case Message_Read_Reply(_,_,_,_) => ReceiveReadReply(s, s', ios[0].r, sent_packets)
+                case Message_Write_Reply(_,_,_) => ReceiveWriteReply(s, s', ios[0].r, sent_packets)
     }
 
     predicate ClientNextProcessPacket(s:Client, s':Client, ios:seq<CMIo>)

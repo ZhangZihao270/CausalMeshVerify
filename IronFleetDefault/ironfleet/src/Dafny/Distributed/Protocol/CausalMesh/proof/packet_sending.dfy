@@ -86,6 +86,30 @@ lemma lemma_ActionThatSendsWriteReplyIsServerReceiveWrite(
     idx, ios :| CMNextServer(ps, ps', idx, ios) && LIoOpSend(p) in ios;
 }
 
+lemma lemma_TheSendPktsInWriteReplyAreExistInSentPackets(
+    ps:CMState,
+    ps':CMState,
+    idx:int,
+    ios:seq<CMIo>
+)
+    requires CMNext(ps, ps')
+    requires 0 <= idx < Nodes
+    requires CMNextServer(ps, ps', idx, ios)
+    requires |ios| > 0
+    requires ios[0].LIoOpReceive?
+    requires ios[0].r.msg.Message_Write?
+    requires ReceiveWrite(ps.servers[idx].s, ps'.servers[idx].s, ios[0].r, ExtractSentPacketsFromIos(ios))
+    ensures var sp := ExtractSentPacketsFromIos(ios);
+            forall p :: p in sp ==> p in ps'.environment.sentPackets // && p !in ps.environment.sentPackets
+{
+    assert CMNextCommon(ps, ps');
+    assert LEnvironment_Next(ps.environment, ps'.environment);
+    assert LEnvironment_PerformIos(ps.environment, ps'.environment, idx, ios);
+    assert ps'.environment.sentPackets == ps.environment.sentPackets + (set io | io in ios && io.LIoOpSend? :: io.s);
+    var sp := ExtractSentPacketsFromIos(ios);
+    assert forall p :: p in sp ==> p in ps'.environment.sentPackets;
+}
+
 
 
 lemma lemma_ActionThatSendsReadIsClientSendRead(
