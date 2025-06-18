@@ -6,6 +6,6 @@
 # show up as "Untracked Files" in the "Team Explorer - Changes" panel.
 #
 .venv/
-IronFleetDefault/.venv/
-IronFleetDefault/dafny3.13/
-IronFleetDefault/dotnet-sdk-6.0.319-linux-x64/
+DistributedSystems/.venv/
+DistributedSystems/dafny3.13/
+DistributedSystems/dotnet-sdk-6.0.319-linux-x64/
