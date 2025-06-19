@@ -392,7 +392,7 @@ atexit.register(display_build_status)
 verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/proof/read_after_write.dfy')
 verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/proof/propagation.dfy')
 verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/proof/deps_are_met.dfy')
-verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/proof/test.dfy')
+verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/proof/read_reply_is_met.dfy')
 # verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/pulldeps2.dfy')
 
 

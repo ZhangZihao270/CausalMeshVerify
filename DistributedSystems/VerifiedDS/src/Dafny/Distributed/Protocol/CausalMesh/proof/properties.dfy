@@ -22,18 +22,19 @@ predicate AVersionIsMetOnAllServers(
 )
     requires 0 < i
     requires IsValidBehaviorPrefix(b, i)
-    requires CMNext(b[i-1], b[i])
+    // requires CMNext(b[i-1], b[i])
     // requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
     requires k in Keys_domain
     requires VectorClockValid(vc)
 {
     // assert CMNextCommon(b[i-1], b[i]);
-    assert (forall j {:trigger CMNext(b[j], b[j+1])} :: 0 <= j < i ==> CMNext(b[j], b[j+1]));
+    lemma_BehaviorValidImpliesOneStepValid(b, i);
+    // assert (forall j {:trigger CMNext(b[j], b[j+1])} :: 0 <= j < i ==> CMNext(b[j], b[j+1]));
     assert CMNext(b[i-1], b[i]);
     forall j :: 0 <= j < |b[i].servers| ==> AVersionOfAKeyIsMet(b[i].servers[j].s.icache, b[i].servers[j].s.ccache, k, vc)
 }
 
-predicate AllVersionsInDepsAreMetOnAllServers(
+predicate {:opaque} AllVersionsInDepsAreMetOnAllServers(
     b:Behavior<CMState>,
     i:int,
     deps:Dependency
@@ -41,56 +42,102 @@ predicate AllVersionsInDepsAreMetOnAllServers(
     requires i > 0
     requires IsValidBehaviorPrefix(b, i)
     // requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
-    requires CMNext(b[i-1], b[i])
+    // requires CMNext(b[i-1], b[i])
     requires DependencyValid(deps)
 {
+    lemma_BehaviorValidImpliesOneStepValid(b, i);
     forall k :: k in deps ==> AVersionIsMetOnAllServers(b, i, k, deps[k])
 }
 
-predicate AllVersionsInCCacheAreMetOnAllServers(
+predicate {:opaque} AllVersionsInCCacheAreMetOnAllServers(
     b:Behavior<CMState>,
     i:int,
     ccache:CCache
 )
     requires i > 0
     requires IsValidBehaviorPrefix(b, i)
-    requires CMNext(b[i-1], b[i])
+    // requires CMNext(b[i-1], b[i])
     // requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
     requires CCacheValid(ccache)
 {
+    lemma_BehaviorValidImpliesOneStepValid(b, i);
     && (forall k :: k in ccache ==> AVersionIsMetOnAllServers(b, i, k, ccache[k].vc))
     && (forall k :: k in ccache ==> AllVersionsInDepsAreMetOnAllServers(b, i, ccache[k].deps))
 }
 
-predicate AllDepsInCCacheAreMetOnAllServers(
-    b:Behavior<CMState>,
-    i:int,
-    ccache:CCache
-)
-    requires i > 0
-    requires IsValidBehaviorPrefix(b, i)
-    requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
-    requires CCacheValid(ccache)
-{
-    forall k :: k in ccache ==>
-        forall kk :: kk in ccache[k].deps ==> AVersionIsMetOnAllServers(b, i, kk, ccache[k].deps[kk])
-}
+// predicate AllDepsInCCacheAreMetOnAllServers(
+//     b:Behavior<CMState>,
+//     i:int,
+//     ccache:CCache
+// )
+//     requires i > 0
+//     requires IsValidBehaviorPrefix(b, i)
+//     requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
+//     requires CCacheValid(ccache)
+// {
+//     forall k :: k in ccache ==>
+//         forall kk :: kk in ccache[k].deps ==> AVersionIsMetOnAllServers(b, i, kk, ccache[k].deps[kk])
+// }
 
-predicate AllDepsInICacheAreMetOnAllServers(
+predicate {:opaque} AllDepsInICacheAreMetOnAllServers(
     b:Behavior<CMState>,
     i:int,
     icache:ICache
 )
     requires i > 0
     requires IsValidBehaviorPrefix(b, i)
-    requires CMNext(b[i-1], b[i])
+    // requires CMNext(b[i-1], b[i])
     // requires forall j {:trigger CMNext(b[j], b[j+1])} :: 0 <= j < i ==> CMNext(b[j], b[j+1])
     // requires ICacheValid(icache)
     requires forall k :: k in icache ==> k in Keys_domain && (forall m :: m in icache[k] ==> MetaValid(m) && m.key == k
                 && (forall kk :: kk in m.deps ==> kk in Keys_domain))
 {
+    lemma_BehaviorValidImpliesOneStepValid(b, i);
     forall k :: k in icache ==>
         forall m :: m in icache[k] ==> 
             forall kk :: kk in m.deps ==> AVersionIsMetOnAllServers(b, i, kk, m.deps[kk])
+}
+
+predicate AllServersAreMet(
+    b:Behavior<CMState>,
+    i:int
+)
+    requires i > 0
+    requires IsValidBehaviorPrefix(b, i)
+    // requires CMNext(b[i-1], b[i])
+{
+    lemma_BehaviorValidImpliesOneStepValid(b, i);
+    forall j :: 0 <= j < |b[i].servers| ==> 
+        AllDepsInICacheAreMetOnAllServers(b, i, b[i].servers[j].s.icache)
+        && AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[j].s.ccache)
+}
+
+predicate AllReadDepsAreMet(
+    b:Behavior<CMState>,
+    i:int
+)
+    requires i > 0
+    requires IsValidBehaviorPrefix(b, i)
+    // requires CMNext(b[i-1], b[i])
+{
+    lemma_BehaviorValidImpliesOneStepValid(b, i);
+    assert forall p :: p in b[i].environment.sentPackets ==> PacketValid(p);
+
+    forall p :: p in b[i].environment.sentPackets && p.msg.Message_Read? ==> 
+        AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_read)
+}
+
+predicate AllReadRepliesAreMet(
+    b:Behavior<CMState>,
+    i:int
+)
+    requires 0 < i 
+    requires IsValidBehaviorPrefix(b, i)
+{
+    lemma_BehaviorValidImpliesOneStepValid(b, i);
+    assert forall p :: p in b[i].environment.sentPackets ==> PacketValid(p);
+
+    forall p :: p in b[i].environment.sentPackets && p.msg.Message_Read_Reply? ==> 
+        AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_rreply) && AVersionIsMetOnAllServers(b, i, p.msg.key_rreply, p.msg.vc_rreply)
 }
 }

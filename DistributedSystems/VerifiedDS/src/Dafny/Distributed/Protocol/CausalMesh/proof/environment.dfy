@@ -14,6 +14,26 @@ import opened Collections__Maps2_s
 import opened CausalMesh_Proof_Constants_i
 import opened CausalMesh_proof_Assumptions_i
 
+lemma lemma_PacketsStaysInSentPackets(
+    b:Behavior<CMState>,
+    i:int, 
+    j:int
+)
+    requires IsValidBehaviorPrefix(b, j)
+    requires 0 <= i <= j
+    ensures forall p :: p in b[i].environment.sentPackets ==> p in b[j].environment.sentPackets
+{
+    if j == i {
+
+    } else {
+        forall p | p in b[i].environment.sentPackets
+            ensures p in b[j].environment.sentPackets
+        {
+            lemma_PacketStaysInSentPackets(b, i, j, p);
+        }
+    }
+}
+
 lemma lemma_PacketStaysInSentPackets(
     b:Behavior<CMState>,
     i:int, 

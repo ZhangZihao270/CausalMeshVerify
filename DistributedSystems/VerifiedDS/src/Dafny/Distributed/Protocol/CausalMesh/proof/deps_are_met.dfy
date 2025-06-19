@@ -57,6 +57,7 @@ lemma lemma_MergedDepsIsMetOnAllServers(
     requires AllVersionsInDepsAreMetOnAllServers(b, i, dep2)
     ensures AllVersionsInDepsAreMetOnAllServers(b, i, DependencyMerge(dep1, dep2))
 {
+    reveal_AllVersionsInDepsAreMetOnAllServers();
     var merged := DependencyMerge(dep1, dep2);
     if |dep1.Keys + dep2.Keys| == 0 {
         assert merged == map[];
@@ -93,6 +94,7 @@ lemma lemma_MergeCCacheEnsuresAllVersionAreMetOnAllServers(
     requires AllVersionsInCCacheAreMetOnAllServers(b, i, metas)
     ensures AllVersionsInCCacheAreMetOnAllServers(b, i, MergeCCache(ccache, metas))
 {
+    reveal_AllVersionsInCCacheAreMetOnAllServers();
     var merged := MergeCCache(ccache, metas);
     forall k | k in merged
         ensures AVersionIsMetOnAllServers(b, i, k, merged[k].vc) && AllVersionsInDepsAreMetOnAllServers(b, i, merged[k].deps)
@@ -186,6 +188,9 @@ lemma lemma_VersionsAfterPullDepsAreMetOnAllServers(
     ensures var res := PullDeps2(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, deps);
             AllVersionsInCCacheAreMetOnAllServers(b, i, res.1)
 {
+    reveal_AllVersionsInDepsAreMetOnAllServers();
+    reveal_AllDepsInICacheAreMetOnAllServers();
+    reveal_AllVersionsInCCacheAreMetOnAllServers();
     assert CMNextCommon(b[i-1], b[i]);
     var icache := b[i].servers[idx].s.icache;
     var ccache := b[i].servers[idx].s.ccache;
@@ -278,6 +283,9 @@ function GetMetasOfAllDepsGlobalView(
     ensures forall k :: k in res ==> AVersionIsMetOnAllServers(b, i, k, res[k].vc) && AllVersionsInDepsAreMetOnAllServers(b, i, res[k].deps)
     decreases |icache.Values|, |deps|
 {
+    reveal_AllVersionsInDepsAreMetOnAllServers();
+    reveal_AllDepsInICacheAreMetOnAllServers();
+    reveal_AllVersionsInCCacheAreMetOnAllServers();
     assert forall k :: k in todos ==> AVersionIsMetOnAllServers(b, i, k, todos[k].vc) && AllVersionsInDepsAreMetOnAllServers(b, i, todos[k].deps);
     if |deps| == 0 then 
         todos

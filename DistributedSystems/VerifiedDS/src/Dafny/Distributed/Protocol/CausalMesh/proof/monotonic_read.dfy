@@ -195,6 +195,7 @@ lemma lemma_ReadReplyHasHigherVCThanDepsPrefix(
 
     // var p_read := lemma_ReadReplyHasCorrspondingReadMessage(b, i, p);
     var p_read := ios[0].r;
+    assert p_read in b[i-1].environment.sentPackets;
 
     // assert p_read.msg.key_read == p.msg.key_rreply;
     // assert p_read.dst == p.src;
@@ -325,7 +326,7 @@ lemma lemma_ServerReceiveReadOnlySentOnePacket(
 )
     requires 1 < i 
     requires IsValidBehaviorPrefix(b, i)
-    requires AllReadReplyHasCorrspondingReadWithSmallOrEqVCForSameKeyInDeps(b, i-1)
+    // requires AllReadReplyHasCorrspondingReadWithSmallOrEqVCForSameKeyInDeps(b, i-1)
     requires 0 <= idx < Nodes
     requires p in b[i].environment.sentPackets
     requires p !in b[i-1].environment.sentPackets
