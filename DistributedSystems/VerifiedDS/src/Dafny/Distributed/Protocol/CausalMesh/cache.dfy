@@ -594,18 +594,42 @@ module CausalMesh_Cache_i {
     {
         assert forall k :: k in p.msg.local ==> MetaValid(p.msg.local[k]);
         var local_metas := set m | m in p.msg.local.Values;
-        // assert forall m :: m in local_metas ==> MetaValid(m);
+        assert forall m :: m in local_metas ==> MetaValid(m);
         var vcs_local := set m | m in local_metas :: m.vc;
         // assert forall vc :: vc in vcs ==> VectorClockValid(vc);
         var vcs_deps := set k | k in p.msg.deps_write :: p.msg.deps_write[k];
-        var merged_vc := FoldVC(s.gvc, vcs_local);  // merge local VC
+
+        var merged_vc := FoldVC(s.gvc, vcs_local);
+        assert forall vc :: vc in vcs_local ==> VCHappendsBefore(vc, merged_vc) || VCEq(vc, merged_vc);
+
         var merged_vc2 := FoldVC(merged_vc, vcs_deps);
+        assert forall vc :: vc in vcs_local ==> VCHappendsBefore(vc, merged_vc2) || VCEq(vc, merged_vc2);
+        assert forall vc :: vc in vcs_deps ==> VCHappendsBefore(vc, merged_vc2) || VCEq(vc, merged_vc2);
+
+        assert forall m :: m in local_metas ==> VCHappendsBefore(m.vc, merged_vc2) || VCEq(m.vc, merged_vc2);
+        assert forall k :: k in p.msg.deps_write ==> VCHappendsBefore(p.msg.deps_write[k], merged_vc2) || VCEq(p.msg.deps_write[k], merged_vc2);
+
         var new_vc := AdvanceVC(merged_vc2, s.id);
 
+        assert VCHappendsBefore(merged_vc2, new_vc) || VCEq(merged_vc2, new_vc);
+        lemma_VCRelationIsTransitive2(p.msg.deps_write, local_metas, merged_vc2, new_vc);
+        assert forall m :: m in local_metas ==> VCHappendsBefore(m.vc, new_vc) || VCEq(m.vc, new_vc);
+        assert forall k :: k in p.msg.deps_write ==> VCHappendsBefore(p.msg.deps_write[k], new_vc) || VCEq(p.msg.deps_write[k], new_vc);
+
         var merged_deps := FoldDependencyFromMetaSet(p.msg.deps_write, local_metas);
+        lemma_FoldDependencyFromMetaSet(p.msg.deps_write, local_metas, new_vc);
+        assert forall k :: k in FoldDependencyFromMetaSet(p.msg.deps_write, local_metas) ==> VCHappendsBefore(FoldDependencyFromMetaSet(p.msg.deps_write, local_metas)[k], new_vc) || VCEq(FoldDependencyFromMetaSet(p.msg.deps_write, local_metas)[k], new_vc);
 
         var meta := Meta(p.msg.key_write, new_vc, merged_deps);
-        var new_icache := s.icache[p.msg.key_write := s.icache[p.msg.key_write] + local_metas + {meta}];
+
+        assert forall k :: k in meta.deps ==> VCHappendsBefore(meta.deps[k], meta.vc) || VCEq(meta.deps[k], meta.vc);
+
+        var new_local_metas := local_metas + {meta};
+
+        // assert forall m :: m in new_local_metas ==> MetaValid(m);
+
+        var new_icache := AddMetasToICache(s.icache, new_local_metas);
+        
 
         var wreply := LPacket(s.id, p.src, Message_Write_Reply(p.msg.opn_write, p.msg.key_write, new_vc));
         var propagate := LPacket(s.id, s.next, Message_Propagation(p.msg.key_write, meta, s.id));
@@ -613,6 +637,23 @@ module CausalMesh_Cache_i {
         && s' == s.(gvc := new_vc, icache := new_icache)
         && sp == [wreply] + [propagate]
     }
+
+
+    lemma lemma_VCRelationIsTransitive2(deps:Dependency, metas:set<Meta>, vc:VectorClock, vc2:VectorClock)
+        requires DependencyValid(deps)
+        requires forall m :: m in metas ==> MetaValid(m)
+        requires VectorClockValid(vc)
+        requires VectorClockValid(vc2)
+        requires forall m :: m in metas ==> VCHappendsBefore(m.vc, vc) || VCEq(m.vc, vc)
+        requires forall k :: k in deps ==> VCHappendsBefore(deps[k], vc) || VCEq(deps[k], vc)
+        requires VCHappendsBefore(vc, vc2) || VCEq(vc, vc2)
+        ensures forall m :: m in metas ==> VCHappendsBefore(m.vc, vc2) || VCEq(m.vc, vc2)
+        ensures forall k :: k in deps ==> VCHappendsBefore(deps[k], vc2) || VCEq(deps[k], vc2)
+    {
+
+    }
+
+
 
 
 

@@ -294,17 +294,7 @@ lemma lemma_VersionMetIsTransitive(
     lemma_AllVersionsInCCacheAreMetOnAllServersWillAlwaysMet(b, i, idx);
 }
 
-predicate CCacheDoesNotDecrease(
-    c1:CCache,
-    c2:CCache
-)
-    requires CCacheValid(c1)
-    requires CCacheValid(c2)
-{
-    && (forall k :: k in c1 ==> k in c2 && (VCHappendsBefore(c1[k].vc, c2[k].vc) || VCEq(c1[k].vc, c2[k].vc)))
-    && (forall k :: k in c1 ==> 
-            forall kk :: kk in c1[k].deps ==> kk in c2[k].deps && (VCHappendsBefore(c1[k].deps[kk], c2[k].deps[kk]) || VCEq(c1[k].deps[kk], c2[k].deps[kk])) )
-}
+
 
 // predicate MetaDoesNotDecrease(
 //     m1:Meta,
@@ -315,27 +305,6 @@ predicate CCacheDoesNotDecrease(
 
 // }
 
-predicate ICacheDoesNotDecrease(
-    c1:ICache,
-    c2:ICache
-)
-    requires ICacheValid(c1)
-    requires ICacheValid(c2)
-{
-    forall k :: k in c1 ==> k in c2 && 
-        forall m :: m in c1[k] ==> m in c2[k]
-}
-
-predicate ServerNextDoesNotDecreaseVersions(
-    ps:CMState,
-    ps':CMState
-)
-    requires CMNext(ps, ps')
-{
-    forall i :: 0 <= i < |ps.servers| ==> 
-        CCacheDoesNotDecrease(ps.servers[i].s.ccache, ps'.servers[i].s.ccache) 
-        && ICacheDoesNotDecrease(ps.servers[i].s.icache, ps'.servers[i].s.icache)
-}
 
 lemma {:axiom} lemma_AVersionIsMetWillAlwaysMet(
     i1:ICache,
@@ -410,12 +379,13 @@ lemma lemma_AllVersionsInDepsAreMetOnAllServersWillAlwaysMet(
     requires 1 < i
     requires IsValidBehaviorPrefix(b, i)
     requires CMNext(b[i-1], b[i])
-    requires CMNext(b[i-2], b[i-1])
+    // requires CMNext(b[i-2], b[i-1])
     requires DependencyValid(deps)
     requires ServerNextDoesNotDecreaseVersions(b[i-1], b[i])
     requires AllVersionsInDepsAreMetOnAllServers(b, i-1, deps)
     ensures AllVersionsInDepsAreMetOnAllServers(b, i, deps)
 {
+    lemma_BehaviorValidImpliesOneStepValid(b, i-1);
     reveal_AllVersionsInDepsAreMetOnAllServers();
     assert forall j :: 0 <= j < |b[i-1].servers| ==> 
         CCacheDoesNotDecrease(b[i-1].servers[j].s.ccache, b[i].servers[j].s.ccache) 
@@ -438,7 +408,7 @@ lemma {:axiom} lemma_AllDepsInICacheAreMetOnAllServersWillAlwaysMet(
     requires 1 < i
     requires IsValidBehaviorPrefix(b, i)
     requires CMNext(b[i-1], b[i])
-    requires CMNext(b[i-2], b[i-1])
+    // requires CMNext(b[i-2], b[i-1])
     requires 0 <= idx < Nodes
     requires ServerNextDoesNotDecreaseVersions(b[i-1], b[i])
     requires AllDepsInICacheAreMetOnAllServers(b, i-1, b[i].servers[idx].s.icache)
@@ -479,12 +449,15 @@ lemma lemma_AllVersionsInCCacheAreMetOnAllServersWillAlwaysMet(
     requires 1 < i
     requires IsValidBehaviorPrefix(b, i)
     requires CMNext(b[i-1], b[i])
-    requires CMNext(b[i-2], b[i-1])
+    // requires CMNext(b[i-2], b[i-1])
     requires 0 <= idx < Nodes
     requires ServerNextDoesNotDecreaseVersions(b[i-1], b[i])
     requires AllVersionsInCCacheAreMetOnAllServers(b, i-1, b[i].servers[idx].s.ccache)
     ensures AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache)
 {
+    assert i-1 > 0;
+    assert IsValidBehaviorPrefix(b, i-1);
+    lemma_BehaviorValidImpliesOneStepValid(b, i-1);
     reveal_AllVersionsInCCacheAreMetOnAllServers();
     assert forall j :: 0 <= j < |b[i-1].servers| ==> 
         CCacheDoesNotDecrease(b[i-1].servers[j].s.ccache, b[i].servers[j].s.ccache) 

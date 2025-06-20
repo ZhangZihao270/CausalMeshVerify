@@ -97,7 +97,6 @@ module CausalMesh_PullDeps_i {
                     var res' := GetMetasOfAllDeps(icache, new_deps, todos', domain);
                     res'
                 else 
-                    // 如果是这样，那就是已经merge到ccache里了，这是是不是应该直接拿ccache里的
                     var initial := EmptyMeta(k);
                     var meta := initial.(vc:=deps[k]);
                     assert CausalCut(todos);

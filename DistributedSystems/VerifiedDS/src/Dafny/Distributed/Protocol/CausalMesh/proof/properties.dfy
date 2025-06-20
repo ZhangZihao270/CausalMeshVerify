@@ -140,4 +140,39 @@ predicate AllReadRepliesAreMet(
     forall p :: p in b[i].environment.sentPackets && p.msg.Message_Read_Reply? ==> 
         AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_rreply) && AVersionIsMetOnAllServers(b, i, p.msg.key_rreply, p.msg.vc_rreply)
 }
+
+predicate CCacheDoesNotDecrease(
+    c1:CCache,
+    c2:CCache
+)
+    requires CCacheValid(c1)
+    requires CCacheValid(c2)
+{
+    && (forall k :: k in c1 ==> k in c2 && (VCHappendsBefore(c1[k].vc, c2[k].vc) || VCEq(c1[k].vc, c2[k].vc)))
+    && (forall k :: k in c1 ==> 
+            forall kk :: kk in c1[k].deps ==> kk in c2[k].deps && (VCHappendsBefore(c1[k].deps[kk], c2[k].deps[kk]) || VCEq(c1[k].deps[kk], c2[k].deps[kk])) )
+}
+
+predicate ICacheDoesNotDecrease(
+    c1:ICache,
+    c2:ICache
+)
+    requires ICacheValid(c1)
+    requires ICacheValid(c2)
+{
+    forall k :: k in c1 ==> k in c2 && 
+        forall m :: m in c1[k] ==> m in c2[k]
+}
+
+predicate ServerNextDoesNotDecreaseVersions(
+    ps:CMState,
+    ps':CMState
+)
+    requires CMNext(ps, ps')
+{
+    forall i :: 0 <= i < |ps.servers| ==> 
+        CCacheDoesNotDecrease(ps.servers[i].s.ccache, ps'.servers[i].s.ccache) 
+        && ICacheDoesNotDecrease(ps.servers[i].s.icache, ps'.servers[i].s.icache)
+}
+
 }

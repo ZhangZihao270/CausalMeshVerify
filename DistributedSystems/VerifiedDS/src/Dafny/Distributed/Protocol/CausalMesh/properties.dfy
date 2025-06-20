@@ -30,6 +30,29 @@ module CausalMesh_Properties_i {
         VCEq(vc, m.vc) || VCHappendsBefore(vc, m.vc)
     }
 
+    lemma lemma_MergedVCIsMet(icache:ICache, ccache:CCache, k:Key, vc1:VectorClock, vc2:VectorClock)
+        requires ICacheValid(icache)
+        requires CCacheValid(ccache)
+        requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+        requires k in Keys_domain
+        requires VectorClockValid(vc1)
+        requires VectorClockValid(vc2)
+        requires AVersionOfAKeyIsMet(icache, ccache, k, vc1)
+        requires AVersionOfAKeyIsMet(icache, ccache, k, vc2)
+        ensures AVersionOfAKeyIsMet(icache, ccache, k, VCMerge(vc1, vc2))
+    {
+
+    }
+
+    predicate DepsIsMet(icache:ICache, ccache:CCache, deps:Dependency)
+        requires ICacheValid(icache)
+        requires CCacheValid(ccache)
+        requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+        requires DependencyValid(deps)
+    {
+        forall k :: k in deps ==> AVersionOfAKeyIsMet(icache, ccache, k, deps[k])
+    }
+
     predicate VersionIsMetOnAllServers(k:Key, vc:VectorClock)
     {
         true
