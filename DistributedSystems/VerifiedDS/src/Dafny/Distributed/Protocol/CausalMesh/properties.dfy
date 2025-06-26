@@ -28,21 +28,22 @@ module CausalMesh_Properties_i {
     {
         var m := FoldMetaSet2(ccache[k], icache[k]);
         VCEq(vc, m.vc) || VCHappendsBefore(vc, m.vc)
+        // exists m :: m in icache[k] && VCEq(m.vc, vc)
     }
 
-    lemma lemma_MergedVCIsMet(icache:ICache, ccache:CCache, k:Key, vc1:VectorClock, vc2:VectorClock)
-        requires ICacheValid(icache)
-        requires CCacheValid(ccache)
-        requires forall k :: k in Keys_domain ==> k in icache && k in ccache
-        requires k in Keys_domain
-        requires VectorClockValid(vc1)
-        requires VectorClockValid(vc2)
-        requires AVersionOfAKeyIsMet(icache, ccache, k, vc1)
-        requires AVersionOfAKeyIsMet(icache, ccache, k, vc2)
-        ensures AVersionOfAKeyIsMet(icache, ccache, k, VCMerge(vc1, vc2))
-    {
+    // lemma lemma_MergedVCIsMet(icache:ICache, ccache:CCache, k:Key, vc1:VectorClock, vc2:VectorClock)
+    //     requires ICacheValid(icache)
+    //     requires CCacheValid(ccache)
+    //     requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+    //     requires k in Keys_domain
+    //     requires VectorClockValid(vc1)
+    //     requires VectorClockValid(vc2)
+    //     requires AVersionOfAKeyIsMet(icache, ccache, k, vc1)
+    //     requires AVersionOfAKeyIsMet(icache, ccache, k, vc2)
+    //     ensures AVersionOfAKeyIsMet(icache, ccache, k, VCMerge(vc1, vc2))
+    // {
 
-    }
+    // }
 
     predicate {:opaque} DepsIsMet(icache:ICache, ccache:CCache, deps:Dependency)
         requires ICacheValid(icache)

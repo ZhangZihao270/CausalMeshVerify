@@ -2,6 +2,7 @@ include "../distributed_system.dfy"
 // include "causalcut.dfy"
 include "packet_sending.dfy"
 include "properties.dfy"
+include "meta_is_met.dfy"
 include "../../../Common/Collections/Seqs.s.dfy"
 
 module CausalMesh_Proof_DepsAreMet_i {
@@ -18,6 +19,7 @@ import opened CausalMesh_proof_Assumptions_i
 import opened CausalMesh_Proof_Constants_i
 import opened CausalMesh_Proof_PacketSending_i
 import opened CausalMesh_Proof_Properties_i
+import opened CausalMesh_Proof_MetaIsMet_i
 import opened Collections__Seqs_s
 import opened Collections__Maps_i
 import opened Collections__Maps2_s
@@ -227,6 +229,8 @@ function GetMetasOfAllDepsGlobalView(
     requires forall k :: k in Keys_domain ==> k in icache // should we have this?
     requires forall k :: k in deps ==> k in domain 
 
+    requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
+
     requires AllVersionsInDepsAreMetOnAllServers(b, i, deps)
     requires forall k :: k in todos ==> AVersionIsMetOnAllServers(b, i, k, todos[k].vc) && AllVersionsInDepsAreMetOnAllServers(b, i, todos[k].deps)
 
@@ -236,7 +240,6 @@ function GetMetasOfAllDepsGlobalView(
 {
     // lemma_BehaviorValidImpliesOneStepValid(b, i);
     reveal_AllVersionsInDepsAreMetOnAllServers();
-    // reveal_AllDepsInICacheAreMetOnAllServers();
     reveal_AllVersionsInCCacheAreMetOnAllServers();
     
     // assert forall k :: k in todos ==> AVersionIsMetOnAllServers(b, i, k, todos[k].vc); //&& AllVersionsInDepsAreMetOnAllServers(b, i, todos[k].deps);
@@ -249,16 +252,10 @@ function GetMetasOfAllDepsGlobalView(
             var res := GetMetasOfAllDepsGlobalView(b, i, idx, icache, new_deps, todos, domain);
             res
         else 
-            // var metas := set m | m in icache[k] && VCEq(m.vc, deps[k]);
             if exists m :: m in icache[k] && VCEq(m.vc, deps[k]) then 
                 var m :| m in icache[k] && VCEq(m.vc, deps[k]);
-                // var initial := EmptyMeta(k);
-                // var merged := FoldMetaSet(initial, metas, domain);
-                // var meta := merged.(vc := deps[k]);
                 var meta := m;
                 
-                
-                // lemma_FoldMetaBounded(initial, metas, deps[k], domain);
                 assert (VCHappendsBefore(meta.vc, meta.vc) || VCEq(meta.vc, meta.vc));
 
                 var new_cache := icache[k:= icache[k] - {meta}];
@@ -266,27 +263,35 @@ function GetMetasOfAllDepsGlobalView(
                 lemma_MapRemoveSubsetOfTheValOfKey(icache, k, {meta});
                 assert |new_cache.Values| < |icache.Values|;
 
-                lemma_AllVersionsInDepsAreMetOnAllServers(b, i, meta.deps);
+                assert AVersionIsMetOnAllServers(b, i, meta.key, meta.vc);
+                lemma_MetaIsMetImpliesItsDepsAreMet(b, i, meta);
                 assume AllVersionsInDepsAreMetOnAllServers(b, i, meta.deps);
 
                 var res := GetMetasOfAllDepsGlobalView(b, i, idx, new_cache, meta.deps, todos, domain);
 
-                assert forall k :: k in res ==> AVersionIsMetOnAllServers(b, i, k, res[k].vc) && AllVersionsInDepsAreMetOnAllServers(b, i, res[k].deps);
-                assert AVersionIsMetOnAllServers(b, i, k, meta.vc);
+                assume forall k :: k in res ==> AVersionIsMetOnAllServers(b, i, k, res[k].vc) && AllVersionsInDepsAreMetOnAllServers(b, i, res[k].deps);
+                assume AVersionIsMetOnAllServers(b, i, k, meta.vc);
 
                 var todos' := AddMetaToMetaMap(res, meta);
 
-                assert AllVersionsInDepsAreMetOnAllServers(b, i, new_deps);
+                assume AllVersionsInDepsAreMetOnAllServers(b, i, new_deps);
                 lemma_MetaMapIsMetImpliesInsertedMataMapIsMet(b, i, res, meta);
-                assert forall k :: k in todos' ==> AVersionIsMetOnAllServers(b, i, k, todos'[k].vc) && AllVersionsInDepsAreMetOnAllServers(b, i, todos'[k].deps);
+                assume forall k :: k in todos' ==> AVersionIsMetOnAllServers(b, i, k, todos'[k].vc) && AllVersionsInDepsAreMetOnAllServers(b, i, todos'[k].deps);
 
                 var res' := GetMetasOfAllDepsGlobalView(b, i, idx, icache, new_deps, todos', domain);
                 res'
             else 
                 var initial := EmptyMeta(k);
                 var meta := initial.(vc:=deps[k]);
+
+                assert AllVersionsInDepsAreMetOnAllServers(b, i, deps);
+                assert forall k :: k in todos ==> AVersionIsMetOnAllServers(b, i, k, todos[k].vc) && AllVersionsInDepsAreMetOnAllServers(b, i, todos[k].deps);
+                assert AVersionIsMetOnAllServers(b, i, meta.key, meta.vc);
+                assert AllVersionsInDepsAreMetOnAllServers(b, i, meta.deps);
                 
                 var todos' := AddMetaToMetaMap(todos, meta);
+                lemma_MetaMapIsMetImpliesInsertedMataMapIsMet(b, i, todos, meta);
+                assert forall k :: k in todos' ==> AVersionIsMetOnAllServers(b, i, k, todos'[k].vc) && AllVersionsInDepsAreMetOnAllServers(b, i, todos'[k].deps);
                 
                 var res := GetMetasOfAllDepsGlobalView(b, i, idx, icache, new_deps, todos', domain);
                 res

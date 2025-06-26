@@ -695,8 +695,9 @@ module CausalMesh_Cache_i {
             var merged_meta := MetaMerge(new_ccache[p.msg.key], p.msg.meta);
 
             var new_ccache' := InsertIntoCCache(new_ccache, merged_meta);
+            var new_icache' := AddMetaToICache(new_icache, p.msg.meta);
 
-            && s' == s.(gvc := new_gvc, icache := new_icache, ccache := new_ccache')
+            && s' == s.(gvc := new_gvc, icache := new_icache', ccache := new_ccache')
             && sp == []
         else 
             // var new_icache := FoldMetaIntoICache(s.icache, p.msg.metas);

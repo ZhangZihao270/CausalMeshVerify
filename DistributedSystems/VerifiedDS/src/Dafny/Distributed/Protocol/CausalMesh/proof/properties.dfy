@@ -34,7 +34,43 @@ predicate AVersionIsMetOnAllServers(
     forall j :: 0 <= j < |b[i].servers| ==> AVersionOfAKeyIsMet(b[i].servers[j].s.icache, b[i].servers[j].s.ccache, k, vc)
 }
 
+predicate AVersionIsMetOnAllServers2(
+    b:Behavior<CMState>,
+    i:int,
+    k:Key,
+    vc:VectorClock
+)
+    requires 0 < i
+    requires IsValidBehaviorPrefix(b, i)
+    // requires CMNext(b[i-1], b[i])
+    // requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
+    requires k in Keys_domain
+    requires VectorClockValid(vc)
+{
+    
+    lemma_BehaviorValidImpliesOneStepValid(b, i);
+    reveal_AllVersionsInDepsAreMetOnAllServers();
+    assert CMNext(b[i-1], b[i]);
+    forall j :: 0 <= j < |b[i].servers| ==> AVersionOfAKeyIsMet(b[i].servers[j].s.icache, b[i].servers[j].s.ccache, k, vc) && 
+        (exists m :: m in b[i].servers[j].s.icache[k] ==> AllVersionsInDepsAreMetOnAllServers2(b, i, m.deps))
+}
+
 predicate {:opaque} AllVersionsInDepsAreMetOnAllServers(
+    b:Behavior<CMState>,
+    i:int,
+    deps:Dependency
+)
+    requires i > 0
+    requires IsValidBehaviorPrefix(b, i)
+    // requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
+    // requires CMNext(b[i-1], b[i])
+    requires DependencyValid(deps)
+{
+    lemma_BehaviorValidImpliesOneStepValid(b, i);
+    forall k :: k in deps ==> AVersionIsMetOnAllServers(b, i, k, deps[k])
+}
+
+predicate {:opaque} AllVersionsInDepsAreMetOnAllServers2(
     b:Behavior<CMState>,
     i:int,
     deps:Dependency

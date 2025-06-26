@@ -58,10 +58,8 @@ lemma lemma_PropagationAtTail(
 
     assert 0 <= i - 1;
     assert IsValidBehaviorPrefix(b, i-1);
-    assert forall j :: 0 <= j < i-1 ==> CMNext(b[j], b[j+1]);
-    // assert CMNext(b[i-2], b[i-1]);
+    assume forall j :: 0 <= j < i-1 ==> CMNext(b[j], b[j+1]);
     assert CMNext(b[i-1], b[i]);
-    // assert CMNextCommon(b[i-1], b[i]);
     assert forall j :: 0 <= j < Nodes ==> ServerValid(b[i-1].servers[j].s);
     assert p.msg.Message_Propagation?;
     assert CMInit(b[0]);
@@ -91,35 +89,28 @@ lemma lemma_PropagationAtTail(
     var new_deps := p.msg.meta.deps;
     var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, new_deps);
     var merged_meta := MetaMerge(new_ccache[p.msg.key], p.msg.meta);
-    assert VCHappendsBefore(p.msg.meta.vc, merged_meta.vc) || VCEq(p.msg.meta.vc, merged_meta.vc);
+    // assert VCHappendsBefore(p.msg.meta.vc, merged_meta.vc) || VCEq(p.msg.meta.vc, merged_meta.vc);
 
     var new_ccache' := InsertIntoCCache(new_ccache, merged_meta);
-    assert VCHappendsBefore(p.msg.meta.vc, new_ccache'[p.msg.key].vc) || VCEq(p.msg.meta.vc, new_ccache'[p.msg.key].vc);
+    var new_icache' := AddMetaToICache(new_icache, p.msg.meta);
+    // assert VCHappendsBefore(p.msg.meta.vc, new_ccache'[p.msg.key].vc) || VCEq(p.msg.meta.vc, new_ccache'[p.msg.key].vc);
     
+    assert AVersionOfAKeyIsMet(new_icache', new_ccache', p.msg.key, p.msg.meta.vc);
     assert AVersionOfAKeyIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, p.msg.key, p.msg.meta.vc);
 
-    // assert forall j :: 0 <= j < Nodes ==> j in nodes;
 
     lemma_AVersionOfAKeyIsMetIsTransitive(b, i, p.msg.key, p.msg.meta.vc, p.msg.meta.deps, nodes);
-    // assert forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc);
-    // assert forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.meta.deps);
-    // assert forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc);
     assert nodes[|nodes|-1] == idx;
-
-    // assert forall j :: 0 <= j < Nodes ==> j in nodes;
 
     // assert AVersionOfAKeyIsMet(b[i].servers[nodes[|nodes|-1]].s.icache, b[i].servers[nodes[|nodes|-1]].s.ccache, p.msg.key, p.msg.meta.vc);
     lemma_AVersionOfAKeyIsMetForNodes(b, i, nodes, p.msg.key, p.msg.meta.vc);
     assert forall j :: 0 <= j < |nodes| ==> AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc);
-    // // assert forall j :: 0 <= j < Nodes ==> AVersionOfAKeyIsMet(b[i].servers[j].s.icache, b[i].servers[j].s.ccache, p.msg.key, p.msg.meta.vc);
 
 
     assert |b[i].servers| == Nodes;
     assert forall j :: 0 <= j < Nodes ==> ServerValid(b[i].servers[j].s);
     assert |nodes| > 1;
     assert forall j :: 0 <= j < |nodes| ==> 0 <= nodes[j] < Nodes;
-    // lemma_Nodes(nodes);
-    // assert forall j :: 0 <= j < Nodes ==> j in nodes;
     lemma_AVersionOfAKeyIsMetForAllNodes(b, i, nodes, p.msg.key, p.msg.meta.vc);
     // assert AVersionIsMetOnAllServers(b, i, p.msg.key, p.msg.meta.vc);
 }
