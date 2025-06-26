@@ -375,7 +375,7 @@ lemma lemma_ServerReceiveWriteOnlySentOneWriteReplyPacket2(
     assert ios[1].LIoOpSend?;
     var pkts := ExtractSentPacketsFromIos(ios);
     assert p in pkts;
-    assert |pkts| == 2;
+    // assert |pkts| == 2;
     assert LEnvironment_Next(b[i-1].environment, b[i].environment);
     assert b[i-1].environment.nextStep.LEnvStepHostIos?;
     assert b[i].environment.sentPackets == b[i-1].environment.sentPackets + (set io | io in ios && io.LIoOpSend? :: io.s);
@@ -391,7 +391,7 @@ lemma lemma_ServerWriteReplyLargerVCThanLocalAndDeps(s:Server, s':Server, p:Pack
     requires ServerValid(s)
     requires PacketValid(p) 
     requires ReceiveWrite(s, s', p, sp)
-    ensures |sp| == 2
+    // ensures |sp| == 2
     ensures sp[0].msg.Message_Write_Reply?
     ensures p.msg.key_write == sp[0].msg.key_wreply
     ensures forall k :: k in p.msg.local ==> 

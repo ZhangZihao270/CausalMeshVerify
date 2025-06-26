@@ -5,7 +5,7 @@ module Environment_s {
 import opened Collections__Maps2_s
 import opened Temporal__Temporal_s
 
-datatype LPacket<IdType, MessageType(==)> = LPacket(dst:IdType, src:IdType, msg:MessageType)
+datatype LPacket<IdType, MessageType(==)> = LPacket(src:IdType, dst:IdType, msg:MessageType)
 
 datatype LIoOp<IdType, MessageType(==)> = LIoOpSend(s:LPacket<IdType, MessageType>)
                                         | LIoOpReceive(r:LPacket<IdType, MessageType>)

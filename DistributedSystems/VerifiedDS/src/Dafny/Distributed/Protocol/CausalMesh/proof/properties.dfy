@@ -127,6 +127,21 @@ predicate AllReadDepsAreMet(
         AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_read)
 }
 
+predicate AllWriteDepsAreMet(
+    b:Behavior<CMState>,
+    i:int
+)
+    requires i > 0
+    requires IsValidBehaviorPrefix(b, i)
+    // requires CMNext(b[i-1], b[i])
+{
+    lemma_BehaviorValidImpliesOneStepValid(b, i);
+    assert forall p :: p in b[i].environment.sentPackets ==> PacketValid(p);
+
+    forall p :: p in b[i].environment.sentPackets && p.msg.Message_Write? ==> 
+        AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_write)
+}
+
 predicate AllReadRepliesAreMet(
     b:Behavior<CMState>,
     i:int

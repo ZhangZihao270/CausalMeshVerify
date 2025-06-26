@@ -587,6 +587,23 @@ module CausalMesh_Cache_i {
     //     && sp == [wreply] + [propagate]
     // }
 
+    function ConstructPropagatePkts(metas:set<Meta>, id:int, dst:int) : (res:seq<Packet>)
+        requires forall m :: m in metas ==> MetaValid(m)
+        requires 0 <= id < Nodes
+        requires 0 <= dst < Nodes
+        ensures |res| == |metas|
+        ensures forall p :: p in res ==> p.msg.Message_Propagation? && p.src == id && p.dst == dst
+    {
+        if |metas| == 0 then
+            []
+        else 
+            var m :| m in metas;
+            var new_metas := metas - {m};
+            var propagate := LPacket(id, dst, Message_Propagation(m.key, m, id));
+            assert propagate.dst == dst;
+            [propagate] + ConstructPropagatePkts(new_metas, id, dst)
+    }
+
     predicate ReceiveWrite(s: Server, s': Server, p: Packet, sp: seq<Packet>)
         requires p.msg.Message_Write?
         requires ServerValid(s)
@@ -633,9 +650,10 @@ module CausalMesh_Cache_i {
 
         var wreply := LPacket(s.id, p.src, Message_Write_Reply(p.msg.opn_write, p.msg.key_write, new_vc));
         var propagate := LPacket(s.id, s.next, Message_Propagation(p.msg.key_write, meta, s.id));
+        var old_propagates := ConstructPropagatePkts(local_metas, s.id, s.next);
 
         && s' == s.(gvc := new_vc, icache := new_icache)
-        && sp == [wreply] + [propagate]
+        && sp == [wreply] /*+ old_propagates*/ + [propagate]
     }
 
 

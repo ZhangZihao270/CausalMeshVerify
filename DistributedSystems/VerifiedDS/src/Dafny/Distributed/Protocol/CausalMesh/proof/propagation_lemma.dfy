@@ -43,19 +43,21 @@ lemma lemma_PropagationAtHead(
     requires PacketValid(ios[0].r)
     requires key == ios[0].r.msg.key_write
     // requires ios[0].r.msg.start != b[i-1].servers[idx].s.next
+    requires DepsIsMet(b[i-1].servers[idx].s.icache, b[i-1].servers[idx].s.ccache, ios[0].r.msg.deps_write)
     requires ReceiveWrite(b[i-1].servers[idx].s, b[i].servers[idx].s, ios[0].r, ExtractSentPacketsFromIos(ios))
     requires var sp := ExtractSentPacketsFromIos(ios);
-                sp[1].msg.Message_Propagation? && sp[1].msg.meta.vc == vc 
-                && sp[1].msg.meta.deps == deps
+                sp[|sp|-1].msg.Message_Propagation? && sp[|sp|-1].msg.meta.vc == vc 
+                && sp[|sp|-1].msg.meta.deps == deps
     ensures AVersionOfAKeyIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, key, vc)
-    // ensures DepsIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, deps)
+    ensures DepsIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, deps)
 {
+    reveal_DepsIsMet();
     var p := ios[0].r;
     var s := b[i-1].servers[idx].s;
     var s' := b[i].servers[idx].s;
 
     var sp := ExtractSentPacketsFromIos(ios);
-    var p_pro := sp[1];
+    var p_pro := sp[|sp|-1];
     assert p_pro.msg.Message_Propagation?;
     assert p_pro.msg.start == s.id;
 
@@ -112,6 +114,8 @@ lemma lemma_PropagationAtHead(
     assert forall m :: m in s'.icache[k] ==> VCHappendsBefore(m.vc, merged_meta.vc) || VCEq(m.vc, merged_meta.vc);
     assert VCHappendsBefore(meta.vc, merged_meta.vc) || VCEq(meta.vc, merged_meta.vc);
     assert AVersionOfAKeyIsMet(s'.icache, s'.ccache, p_pro.msg.key, meta.vc);
+
+    lemma_DepsInPropagationIsInWriteDepsOrLocals(b, i, idx, ios);
 }
 
 lemma lemma_DepsInPropagationIsInWriteDepsOrLocals(
@@ -130,14 +134,16 @@ lemma lemma_DepsInPropagationIsInWriteDepsOrLocals(
     requires PacketValid(ios[0].r)
     requires DepsIsMet(b[i-1].servers[idx].s.icache, b[i-1].servers[idx].s.ccache, ios[0].r.msg.deps_write)
     requires ReceiveWrite(b[i-1].servers[idx].s, b[i].servers[idx].s, ios[0].r, ExtractSentPacketsFromIos(ios))
-    ensures DepsIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, ExtractSentPacketsFromIos(ios)[1].msg.meta.deps)
+    ensures var sp := ExtractSentPacketsFromIos(ios);
+            DepsIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, sp[|sp|-1].msg.meta.deps)
 {
+    reveal_DepsIsMet();
     var p := ios[0].r;
     var s := b[i-1].servers[idx].s;
     var s' := b[i].servers[idx].s;
 
     var sp := ExtractSentPacketsFromIos(ios);
-    var p_pro := sp[1];
+    var p_pro := sp[|sp|-1];
     assert p_pro.msg.Message_Propagation?;
     assert p_pro.msg.start == s.id;
 
@@ -187,9 +193,9 @@ lemma lemma_DepsInPropagationIsInWriteDepsOrLocals(
 
     lemma_DepsInPropagationIsInWriteDepsOrLocals_helper(s.icache, s'.ccache, s'.icache, p.msg.deps_write, local_metas, meta);
     assert DepsIsMet(s'.icache, s'.ccache, merged_deps);
-    assert ExtractSentPacketsFromIos(ios)[1].msg.Message_Propagation?;
-    assert ExtractSentPacketsFromIos(ios)[1].msg.meta.deps == merged_deps;
-    assert DepsIsMet(s'.icache, s'.ccache, ExtractSentPacketsFromIos(ios)[1].msg.meta.deps);
+    assert sp[|sp|-1].msg.Message_Propagation?;
+    assert sp[|sp|-1].msg.meta.deps == merged_deps;
+    assert DepsIsMet(s'.icache, s'.ccache, sp[|sp|-1].msg.meta.deps);
 }
 
 

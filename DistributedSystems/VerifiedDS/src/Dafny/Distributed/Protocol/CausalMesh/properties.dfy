@@ -44,7 +44,7 @@ module CausalMesh_Properties_i {
 
     }
 
-    predicate DepsIsMet(icache:ICache, ccache:CCache, deps:Dependency)
+    predicate {:opaque} DepsIsMet(icache:ICache, ccache:CCache, deps:Dependency)
         requires ICacheValid(icache)
         requires CCacheValid(ccache)
         requires forall k :: k in Keys_domain ==> k in icache && k in ccache
