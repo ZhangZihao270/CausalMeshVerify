@@ -127,7 +127,7 @@ lemma lemma_CMNextCacheDoesNotDecrease_helper(b:Behavior<CMState>, i:int, idx:in
     if p.msg.Message_Read? {
         assert ReceiveRead(s, s', p, sp);
         var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, p.msg.deps_read);
-        lemma_PullDeps2DoneNotDecreaseVersions(s.icache, s.ccache, p.msg.deps_read);
+        lemma_PullDeps2DoesNotDecreaseVersions(s.icache, s.ccache, p.msg.deps_read);
         assert s'.icache == new_icache;
         assert s'.ccache == new_ccache;
         assert CCacheDoesNotDecrease(s.ccache, s'.ccache);
@@ -137,25 +137,29 @@ lemma lemma_CMNextCacheDoesNotDecrease_helper(b:Behavior<CMState>, i:int, idx:in
     {
         assert ReceiveWrite(s, s', p, sp);
         assert CCacheDoesNotDecrease(s.ccache, s'.ccache);
+        lemma_ServerReceiveWriteDoesNotDecreaseVersions(s, s', p, sp);
         assert ICacheDoesNotDecrease(s.icache, s'.icache);
     }
     else {
         assert p.msg.Message_Propagation?;
         assert ReceivePropagate(s, s', p, sp);
-        if s.next == p.msg.start {
+        if s.next == p.msg.start && p.msg.round == 2 {
             var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, p.msg.meta.deps);
-            lemma_PullDeps2DoneNotDecreaseVersions(s.icache, s.ccache, p.msg.meta.deps);
-            assert s'.icache == new_icache;
+            lemma_PullDeps2DoesNotDecreaseVersions(s.icache, s.ccache, p.msg.meta.deps);
+
             assert CCacheDoesNotDecrease(s.ccache, new_ccache);
             var merged_meta := MetaMerge(new_ccache[p.msg.key], p.msg.meta);
             var new_ccache' := InsertIntoCCache(new_ccache, merged_meta);
+            lemma_InsertIntoCCacheDoesNotDecreaseVersions(new_ccache, merged_meta);
             assert CCacheDoesNotDecrease(new_ccache, new_ccache');
-            // assert VCHappendsBefore(new_ccache[p.msg.key].vc, )
-            // assert s'.ccache == new_ccache;
+            lemma_CCacheDoesNotDecreaseIsTransitive(s.ccache, new_ccache, new_ccache');
             assert CCacheDoesNotDecrease(s.ccache, s'.ccache);
+            assert CCacheDoesNotDecrease(s.ccache, s'.ccache);
+
             assert ICacheDoesNotDecrease(s.icache, s'.icache);
         }
     }
+
     assert CCacheDoesNotDecrease(s.ccache, s'.ccache);
     assert ICacheDoesNotDecrease(s.icache, s'.icache);
     assert forall j :: 0 <= j < |b[i].servers| && j != idx ==> 
@@ -185,7 +189,91 @@ lemma lemma_CMNextCacheDoesNotDecrease_helper2(b:Behavior<CMState>, i:int, idx:i
 
 }
 
-lemma lemma_PullDeps2DoneNotDecreaseVersions(
+lemma lemma_ServerReceiveWriteDoesNotDecreaseVersions(
+    s: Server, s': Server, p: Packet, sp: seq<Packet>
+)
+    requires p.msg.Message_Write?
+    requires ServerValid(s)
+    requires ServerValid(s')
+    requires PacketValid(p)
+    requires ReceiveWrite(s, s', p, sp)
+    ensures ICacheDoesNotDecrease(s.icache, s'.icache)
+{
+    assert forall k :: k in p.msg.local ==> MetaValid(p.msg.local[k]);
+    var local_metas := set m | m in p.msg.local.Values;
+    assert forall m :: m in local_metas ==> MetaValid(m);
+    var vcs_local := set m | m in local_metas :: m.vc;
+    // assert forall vc :: vc in vcs ==> VectorClockValid(vc);
+    var vcs_deps := set k | k in p.msg.deps_write :: p.msg.deps_write[k];
+
+    var merged_vc := FoldVC(s.gvc, vcs_local);
+    assert forall vc :: vc in vcs_local ==> VCHappendsBefore(vc, merged_vc) || VCEq(vc, merged_vc);
+
+    var merged_vc2 := FoldVC(merged_vc, vcs_deps);
+    assert forall vc :: vc in vcs_local ==> VCHappendsBefore(vc, merged_vc2) || VCEq(vc, merged_vc2);
+    assert forall vc :: vc in vcs_deps ==> VCHappendsBefore(vc, merged_vc2) || VCEq(vc, merged_vc2);
+
+    assert forall m :: m in local_metas ==> VCHappendsBefore(m.vc, merged_vc2) || VCEq(m.vc, merged_vc2);
+    assert forall k :: k in p.msg.deps_write ==> VCHappendsBefore(p.msg.deps_write[k], merged_vc2) || VCEq(p.msg.deps_write[k], merged_vc2);
+
+    var new_vc := AdvanceVC(merged_vc2, s.id);
+
+    assert VCHappendsBefore(merged_vc2, new_vc) || VCEq(merged_vc2, new_vc);
+    lemma_VCRelationIsTransitive2(p.msg.deps_write, local_metas, merged_vc2, new_vc);
+    assert forall m :: m in local_metas ==> VCHappendsBefore(m.vc, new_vc) || VCEq(m.vc, new_vc);
+    assert forall k :: k in p.msg.deps_write ==> VCHappendsBefore(p.msg.deps_write[k], new_vc) || VCEq(p.msg.deps_write[k], new_vc);
+
+    var merged_deps := FoldDependencyFromMetaSet(p.msg.deps_write, local_metas);
+    lemma_FoldDependencyFromMetaSet(p.msg.deps_write, local_metas, new_vc);
+    assert forall k :: k in FoldDependencyFromMetaSet(p.msg.deps_write, local_metas) ==> VCHappendsBefore(FoldDependencyFromMetaSet(p.msg.deps_write, local_metas)[k], new_vc) || VCEq(FoldDependencyFromMetaSet(p.msg.deps_write, local_metas)[k], new_vc);
+
+    var meta := Meta(p.msg.key_write, new_vc, merged_deps);
+
+    assert forall k :: k in meta.deps ==> VCHappendsBefore(meta.deps[k], meta.vc) || VCEq(meta.deps[k], meta.vc);
+
+    var new_local_metas := local_metas + {meta};
+
+    lemma_AddMetasToICacheDoesNotDecreaseVersions(s.icache, new_local_metas);
+    assert ICacheDoesNotDecrease(s.icache, s'.icache);
+}
+
+lemma lemma_AddMetasToICacheDoesNotDecreaseVersions(
+    icache:ICache, metas:set<Meta>
+)
+    requires ICacheValid(icache)
+    requires forall k :: k in Keys_domain ==> k in icache
+    requires forall m :: m in metas ==> MetaValid(m)
+    ensures var new_icache := AddMetasToICache(icache, metas);
+        ICacheDoesNotDecrease(icache, new_icache)
+{
+
+}
+
+lemma lemma_InsertIntoCCacheDoesNotDecreaseVersions(
+    ccache:CCache, meta:Meta
+)
+    requires CCacheValid(ccache)
+    requires MetaValid(meta)
+    ensures var new_ccache := InsertIntoCCache(ccache, meta);
+            CCacheDoesNotDecrease(ccache, new_ccache)
+{
+
+}
+
+lemma lemma_CCacheDoesNotDecreaseIsTransitive(
+    c1:CCache, c2:CCache, c3:CCache
+)
+    requires CCacheValid(c1)
+    requires CCacheValid(c2)
+    requires CCacheValid(c3)
+    requires CCacheDoesNotDecrease(c1, c2)
+    requires CCacheDoesNotDecrease(c2, c3)
+    ensures CCacheDoesNotDecrease(c1, c3)
+{
+
+}
+
+lemma lemma_PullDeps2DoesNotDecreaseVersions(
     icache:ICache, ccache:CCache, deps:Dependency
 )
     requires ICacheValid(icache)

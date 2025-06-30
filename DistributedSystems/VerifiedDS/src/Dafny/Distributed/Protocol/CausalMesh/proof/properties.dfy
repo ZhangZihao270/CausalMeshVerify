@@ -115,24 +115,24 @@ predicate {:opaque} AllVersionsInCCacheAreMetOnAllServers(
 //         forall kk :: kk in ccache[k].deps ==> AVersionIsMetOnAllServers(b, i, kk, ccache[k].deps[kk])
 // }
 
-predicate {:opaque} AllDepsInICacheAreMetOnAllServers(
-    b:Behavior<CMState>,
-    i:int,
-    icache:ICache
-)
-    requires i > 0
-    requires IsValidBehaviorPrefix(b, i)
-    // requires CMNext(b[i-1], b[i])
-    // requires forall j {:trigger CMNext(b[j], b[j+1])} :: 0 <= j < i ==> CMNext(b[j], b[j+1])
-    // requires ICacheValid(icache)
-    requires forall k :: k in icache ==> k in Keys_domain && (forall m :: m in icache[k] ==> MetaValid(m) && m.key == k
-                && (forall kk :: kk in m.deps ==> kk in Keys_domain))
-{
-    lemma_BehaviorValidImpliesOneStepValid(b, i);
-    forall k :: k in icache ==>
-        forall m :: m in icache[k] ==> 
-            forall kk :: kk in m.deps ==> AVersionIsMetOnAllServers(b, i, kk, m.deps[kk])
-}
+// predicate {:opaque} AllDepsInICacheAreMetOnAllServers(
+//     b:Behavior<CMState>,
+//     i:int,
+//     icache:ICache
+// )
+//     requires i > 0
+//     requires IsValidBehaviorPrefix(b, i)
+//     // requires CMNext(b[i-1], b[i])
+//     // requires forall j {:trigger CMNext(b[j], b[j+1])} :: 0 <= j < i ==> CMNext(b[j], b[j+1])
+//     // requires ICacheValid(icache)
+//     requires forall k :: k in icache ==> k in Keys_domain && (forall m :: m in icache[k] ==> MetaValid(m) && m.key == k
+//                 && (forall kk :: kk in m.deps ==> kk in Keys_domain))
+// {
+//     lemma_BehaviorValidImpliesOneStepValid(b, i);
+//     forall k :: k in icache ==>
+//         forall m :: m in icache[k] ==> 
+//             forall kk :: kk in m.deps ==> AVersionIsMetOnAllServers(b, i, kk, m.deps[kk])
+// }
 
 predicate AllServersAreMet(
     b:Behavior<CMState>,
@@ -142,10 +142,13 @@ predicate AllServersAreMet(
     requires IsValidBehaviorPrefix(b, i)
     // requires CMNext(b[i-1], b[i])
 {
-    lemma_BehaviorValidImpliesOneStepValid(b, i);
-    forall j :: 0 <= j < |b[i].servers| ==> 
-        AllDepsInICacheAreMetOnAllServers(b, i, b[i].servers[j].s.icache)
-        && AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[j].s.ccache)
+    // if i == 0 then
+    //     true
+    // else 
+        lemma_BehaviorValidImpliesOneStepValid(b, i);
+        forall j :: 0 <= j < |b[i].servers| ==> 
+            // AllDepsInICacheAreMetOnAllServers(b, i, b[i].servers[j].s.icache)
+            && AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[j].s.ccache)
 }
 
 predicate AllReadDepsAreMet(

@@ -587,22 +587,22 @@ module CausalMesh_Cache_i {
     //     && sp == [wreply] + [propagate]
     // }
 
-    function ConstructPropagatePkts(metas:set<Meta>, id:int, dst:int) : (res:seq<Packet>)
-        requires forall m :: m in metas ==> MetaValid(m)
-        requires 0 <= id < Nodes
-        requires 0 <= dst < Nodes
-        ensures |res| == |metas|
-        ensures forall p :: p in res ==> p.msg.Message_Propagation? && p.src == id && p.dst == dst
-    {
-        if |metas| == 0 then
-            []
-        else 
-            var m :| m in metas;
-            var new_metas := metas - {m};
-            var propagate := LPacket(id, dst, Message_Propagation(m.key, m, id));
-            assert propagate.dst == dst;
-            [propagate] + ConstructPropagatePkts(new_metas, id, dst)
-    }
+    // function ConstructPropagatePkts(metas:set<Meta>, id:int, dst:int) : (res:seq<Packet>)
+    //     requires forall m :: m in metas ==> MetaValid(m)
+    //     requires 0 <= id < Nodes
+    //     requires 0 <= dst < Nodes
+    //     ensures |res| == |metas|
+    //     ensures forall p :: p in res ==> p.msg.Message_Propagation? && p.src == id && p.dst == dst
+    // {
+    //     if |metas| == 0 then
+    //         []
+    //     else 
+    //         var m :| m in metas;
+    //         var new_metas := metas - {m};
+    //         var propagate := LPacket(id, dst, Message_Propagation(m.key, m, id));
+    //         assert propagate.dst == dst;
+    //         [propagate] + ConstructPropagatePkts(new_metas, id, dst)
+    // }
 
     predicate ReceiveWrite(s: Server, s': Server, p: Packet, sp: seq<Packet>)
         requires p.msg.Message_Write?
@@ -649,8 +649,8 @@ module CausalMesh_Cache_i {
         
 
         var wreply := LPacket(s.id, p.src, Message_Write_Reply(p.msg.opn_write, p.msg.key_write, new_vc));
-        var propagate := LPacket(s.id, s.next, Message_Propagation(p.msg.key_write, meta, s.id));
-        var old_propagates := ConstructPropagatePkts(local_metas, s.id, s.next);
+        var propagate := LPacket(s.id, s.next, Message_Propagation(p.msg.key_write, meta, s.id, 1));
+        // var old_propagates := ConstructPropagatePkts(local_metas, s.id, s.next);
 
         && s' == s.(gvc := new_vc, icache := new_icache)
         && sp == [wreply] /*+ old_propagates*/ + [propagate]
@@ -681,24 +681,25 @@ module CausalMesh_Cache_i {
         requires PacketValid(p)
     {
         if s.next == p.msg.start then
-            // var vcs := set x | x in p.msg.metas :: x.vc;
-            var vcs := p.msg.meta.vc;
-            // var new_gvc := FoldVC(s.gvc, vcs);
-            var new_gvc := VCMerge(s.gvc, vcs);
-            // var deps := set x | x in p.msg.metas :: x.deps;
-            var new_deps := p.msg.meta.deps;
-            // var new_deps := FoldDependency(map[], deps);
+            if p.msg.round == 2 then
+                var vcs := p.msg.meta.vc;
+                var new_gvc := VCMerge(s.gvc, vcs);
+                var new_deps := p.msg.meta.deps;
 
-            var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, new_deps);
+                var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, new_deps);
 
-            // var merged_meta := FoldMetaSet2(new_ccache[p.msg.key], p.msg.metas);
-            var merged_meta := MetaMerge(new_ccache[p.msg.key], p.msg.meta);
+                // var merged_meta := FoldMetaSet2(new_ccache[p.msg.key], p.msg.metas);
+                // var merged_meta := MetaMerge(new_ccache[p.msg.key], p.msg.meta);
 
-            var new_ccache' := InsertIntoCCache(new_ccache, merged_meta);
-            var new_icache' := AddMetaToICache(new_icache, p.msg.meta);
+                var new_ccache' := InsertIntoCCache(new_ccache, p.msg.meta);
+                var new_icache' := AddMetaToICache(new_icache, p.msg.meta);
 
-            && s' == s.(gvc := new_gvc, icache := new_icache', ccache := new_ccache')
-            && sp == []
+                && s' == s.(gvc := new_gvc, icache := new_icache', ccache := new_ccache')
+                && sp == []
+            else
+                var new_icache := AddMetaToICache(s.icache, p.msg.meta);
+                && s' == s.(icache := new_icache)
+                && sp == [LPacket(s.id, s.next, p.msg.(round := 2))]
         else 
             // var new_icache := FoldMetaIntoICache(s.icache, p.msg.metas);
             var new_icache := AddMetaToICache(s.icache, p.msg.meta);
@@ -801,7 +802,7 @@ module CausalMesh_Cache_i {
             match ios[0].r.msg 
                 case Message_Read(_,_,_) => ReceiveRead(s, s', ios[0].r, sent_packets)
                 case Message_Write(_,_,_,_) => ReceiveWrite(s, s', ios[0].r, sent_packets)
-                case Message_Propagation(_,_,_) => ReceivePropagate(s, s', ios[0].r, sent_packets)
+                case Message_Propagation(_,_,_,_) => ReceivePropagate(s, s', ios[0].r, sent_packets)
     }
 
     // predicate NextProcessPacket(s:Server, s':Server, c:Client, c':Client, ios:seq<CMIo>)

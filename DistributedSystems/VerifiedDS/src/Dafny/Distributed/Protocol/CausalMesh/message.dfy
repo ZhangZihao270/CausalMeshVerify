@@ -12,7 +12,7 @@ module CausalMesh_Message_i {
         | Message_Write(opn_write:int, key_write:Key, deps_write:Dependency, local:map<Key, Meta>)
         | Message_Write_Reply(opn_wreply:int, key_wreply:Key, vc_wreply:VectorClock)
         // | Message_Propagation(key:Key, metas:set<Meta>, start:int)
-        | Message_Propagation(key:Key, meta:Meta, start:int)
+        | Message_Propagation(key:Key, meta:Meta, start:int, round:int)
 
     predicate MessageValid(m:Message)
     {
@@ -22,7 +22,7 @@ module CausalMesh_Message_i {
             case Message_Read_Reply(_,key_rreply, vc_rreply, deps_rreply) => key_rreply in Keys_domain && VectorClockValid(vc_rreply) && DependencyValid(deps_rreply)
             case Message_Write(_,key_write, deps_write, local) => key_write in Keys_domain && DependencyValid(deps_write) && (forall k :: k in local ==> MetaValid(local[k]))
             case Message_Write_Reply(_,key_wreply, vc_wreply/*, deps_wreply*/) => key_wreply in Keys_domain && VectorClockValid(vc_wreply) // && DependencyValid(deps_wreply)
-            case Message_Propagation(key, meta, start) => key in Keys_domain && (MetaValid(meta) && meta.key == key) && 0 <= start < Nodes
+            case Message_Propagation(key, meta, start, round) => key in Keys_domain && (MetaValid(meta) && meta.key == key) && 0 <= start < Nodes
     }
 
     // datatype Packet = Packet(src:int, dst:int, msg:Message)
@@ -42,6 +42,6 @@ module CausalMesh_Message_i {
             case Message_Read_Reply(_,_,_,_) => 0 <= p.dst < Clients && 0 <= p.src < Nodes
             case Message_Write(_,_,_,_) => 0 <= p.src < Clients && 0 <= p.dst < Nodes
             case Message_Write_Reply(_,_,_) => 0 <= p.dst < Clients && 0 <= p.src < Nodes
-            case Message_Propagation(_,_,_) => 0 <= p.src < Nodes && 0 <= p.dst < Nodes && NodesAreNext(p.src, p.dst)
+            case Message_Propagation(_,_,_,_) => 0 <= p.src < Nodes && 0 <= p.dst < Nodes && NodesAreNext(p.src, p.dst)
     }
 }

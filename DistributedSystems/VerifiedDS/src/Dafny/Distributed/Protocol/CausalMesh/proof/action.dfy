@@ -1,6 +1,7 @@
 include "../distributed_system.dfy"
 include "../../../Common/Logic/Temporal/Rules.i.dfy"
 include "constants.dfy"
+include "../../../Common/Collections/Seqs.s.dfy"
 
 module CausalMesh_Proof_Actions_i {
 import opened CausalMesh_Cache_i
@@ -13,6 +14,8 @@ import opened Temporal__Temporal_s
 import opened Collections__Maps2_s
 import opened CausalMesh_Proof_Constants_i
 import opened CausalMesh_proof_Assumptions_i
+import opened Collections__Seqs_s
+import opened Collections__Maps_i
 
   lemma lemma_ActionThatChangesServerIsThatServersAction(
     b:Behavior<CMState>,
@@ -38,4 +41,11 @@ import opened CausalMesh_proof_Assumptions_i
     ios :| CMNextServer(b[i], b[i+1], idx, ios);
   }
 
+  function {:opaque} ConvertBehaviorSeqToImap<T>(s:seq<T>):imap<int, T>
+    requires |s| > 0
+    ensures  imaptotal(ConvertBehaviorSeqToImap(s))
+    ensures  forall i :: 0 <= i < |s| ==> ConvertBehaviorSeqToImap(s)[i] == s[i]
+  {
+    imap i {:trigger s[i]} :: if i < 0 then s[0] else if 0 <= i < |s| then s[i] else last(s)
+  }
 }

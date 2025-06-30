@@ -39,6 +39,7 @@ lemma lemma_ReadRepliesIsMetOnAllServersPrefix(
     requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
     requires forall j :: 0 < j <= i ==> AllServersAreMet(b, j)
     requires forall j :: 0 < j <= i ==> AllReadDepsAreMet(b, j)
+    requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
     ensures AllReadRepliesAreMet(b, i)
 {
     if i <= 1 {
@@ -83,7 +84,7 @@ lemma lemma_ReadRepliesIsMetOnAllServersPrefix(
     lemma_ServerReadReplyIsMetOnAllServers(b, i, idx, p_read, [p]);
 
     assert AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache);
-    assert AllDepsInICacheAreMetOnAllServers(b, i, b[i].servers[idx].s.icache);
+    // assert AllDepsInICacheAreMetOnAllServers(b, i, b[i].servers[idx].s.icache);
     assert AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_rreply);
     assert AVersionIsMetOnAllServers(b, i, p.msg.key_rreply, p.msg.vc_rreply);
 
@@ -210,11 +211,10 @@ lemma lemma_ServerReadReplyIsMetOnAllServers(
     requires ReceiveRead(b[i-1].servers[idx].s, b[i].servers[idx].s, p, sp)
     requires AllVersionsInCCacheAreMetOnAllServers(b, i-1, b[i-1].servers[idx].s.ccache)
     requires AllVersionsInDepsAreMetOnAllServers(b, i-1, p.msg.deps_read)
-    requires AllDepsInICacheAreMetOnAllServers(b, i-1, b[i-1].servers[idx].s.icache)
     requires ServerNextDoesNotDecreaseVersions(b[i-1], b[i])
+    requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
 
     ensures AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache)
-    ensures AllDepsInICacheAreMetOnAllServers(b, i, b[i].servers[idx].s.icache)
     ensures AllVersionsInDepsAreMetOnAllServers(b, i, sp[0].msg.deps_rreply)
     ensures AVersionIsMetOnAllServers(b, i, sp[0].msg.key_rreply, sp[0].msg.vc_rreply)
 {
@@ -229,7 +229,6 @@ lemma lemma_ServerReadReplyIsMetOnAllServers(
     assert i-1 > 0;
     assert IsValidBehaviorPrefix(b, i-1);
     assert CMNext(b[i-2], b[i-1]);
-    assert AllDepsInICacheAreMetOnAllServers(b, i-1, b[i-1].servers[idx].s.icache);
     assert AllVersionsInDepsAreMetOnAllServers(b, i-1, deps);
     assert AllVersionsInCCacheAreMetOnAllServers(b, i-1, b[i-1].servers[idx].s.ccache);
     lemma_VersionsAfterPullDepsAreMetOnAllServers(b, i-1, idx, deps);
@@ -239,14 +238,11 @@ lemma lemma_ServerReadReplyIsMetOnAllServers(
     assert s'.icache == new_icache;
     assert s'.ccache == new_ccache;
 
-    assert AllDepsInICacheAreMetOnAllServers(b, i-1, s'.icache);
     assert AllVersionsInCCacheAreMetOnAllServers(b, i-1, s'.ccache);
 
-    assert AllDepsInICacheAreMetOnAllServers(b, i-1, b[i].servers[idx].s.icache);
     assert AllVersionsInCCacheAreMetOnAllServers(b, i-1, b[i].servers[idx].s.ccache);
 
     reveal_AllVersionsInCCacheAreMetOnAllServers();
-    // assert .msg.key_rreply == 
     assert AVersionIsMetOnAllServers(b, i-1, p_reply.msg.key_rreply, p_reply.msg.vc_rreply);
     assert AllVersionsInDepsAreMetOnAllServers(b, i-1, p_reply.msg.deps_rreply);
 
@@ -254,7 +250,6 @@ lemma lemma_ServerReadReplyIsMetOnAllServers(
 
     assert AVersionIsMetOnAllServers(b, i, p_reply.msg.key_rreply, p_reply.msg.vc_rreply);
     assert AllVersionsInDepsAreMetOnAllServers(b, i, p_reply.msg.deps_rreply);
-    assert AllDepsInICacheAreMetOnAllServers(b, i, b[i].servers[idx].s.icache);
     assert AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache);
 }
 
@@ -277,20 +272,20 @@ lemma lemma_VersionMetIsTransitive(
     requires DependencyValid(deps)
     requires AVersionIsMetOnAllServers(b, i-1, key, vc)
     requires AllVersionsInDepsAreMetOnAllServers(b, i-1, deps)
-    requires AllDepsInICacheAreMetOnAllServers(b, i-1, b[i].servers[idx].s.icache)
+    // requires AllDepsInICacheAreMetOnAllServers(b, i-1, b[i].servers[idx].s.icache)
     requires AllVersionsInCCacheAreMetOnAllServers(b, i-1, b[i].servers[idx].s.ccache)
 
     requires ServerNextDoesNotDecreaseVersions(b[i-1], b[i])
 
     ensures AVersionIsMetOnAllServers(b, i, key, vc)
     ensures AllVersionsInDepsAreMetOnAllServers(b, i, deps)
-    ensures AllDepsInICacheAreMetOnAllServers(b, i, b[i].servers[idx].s.icache)
+    // ensures AllDepsInICacheAreMetOnAllServers(b, i, b[i].servers[idx].s.icache)
     ensures AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache)
 { 
     // assume ServerNextDoesNotDecreaseVersions(b[i-1], b[i]);
     lemma_AVersionIsMetOnAllServersWillAlwaysMet(b, i, key, vc);
     lemma_AllVersionsInDepsAreMetOnAllServersWillAlwaysMet(b, i, deps);
-    lemma_AllDepsInICacheAreMetOnAllServersWillAlwaysMet(b, i, idx);
+    // lemma_AllDepsInICacheAreMetOnAllServersWillAlwaysMet(b, i, idx);
     lemma_AllVersionsInCCacheAreMetOnAllServersWillAlwaysMet(b, i, idx);
 }
 
@@ -400,19 +395,19 @@ lemma lemma_AllVersionsInDepsAreMetOnAllServersWillAlwaysMet(
     }
 }
 
-lemma {:axiom} lemma_AllDepsInICacheAreMetOnAllServersWillAlwaysMet(
-    b:Behavior<CMState>,
-    i:int,
-    idx:int
-)
-    requires 1 < i
-    requires IsValidBehaviorPrefix(b, i)
-    requires CMNext(b[i-1], b[i])
-    // requires CMNext(b[i-2], b[i-1])
-    requires 0 <= idx < Nodes
-    requires ServerNextDoesNotDecreaseVersions(b[i-1], b[i])
-    requires AllDepsInICacheAreMetOnAllServers(b, i-1, b[i].servers[idx].s.icache)
-    ensures AllDepsInICacheAreMetOnAllServers(b, i, b[i].servers[idx].s.icache)
+// lemma {:axiom} lemma_AllDepsInICacheAreMetOnAllServersWillAlwaysMet(
+//     b:Behavior<CMState>,
+//     i:int,
+//     idx:int
+// )
+//     requires 1 < i
+//     requires IsValidBehaviorPrefix(b, i)
+//     requires CMNext(b[i-1], b[i])
+//     // requires CMNext(b[i-2], b[i-1])
+//     requires 0 <= idx < Nodes
+//     requires ServerNextDoesNotDecreaseVersions(b[i-1], b[i])
+//     requires AllDepsInICacheAreMetOnAllServers(b, i-1, b[i].servers[idx].s.icache)
+//     ensures AllDepsInICacheAreMetOnAllServers(b, i, b[i].servers[idx].s.icache)
 // {
 //     assert forall j :: 0 <= j < |b[i-1].servers| ==> 
 //         CCacheDoesNotDecrease(b[i-1].servers[j].s.ccache, b[i].servers[j].s.ccache) 

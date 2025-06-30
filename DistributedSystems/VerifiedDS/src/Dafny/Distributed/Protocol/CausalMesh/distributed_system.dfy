@@ -13,6 +13,12 @@ datatype CMState = CMState(
     clients:seq<LClient>
 )
 
+// predicate {:opaque} ServerIdsAreMatch(ps:CMState)
+//     requires |ps.servers| == Nodes
+// {
+//     && (forall i :: 0 <= i < Nodes ==> ps.servers[i].s.id == i)
+// }
+
 predicate CMComplete(ps:CMState)
 {
     && |ps.servers| == Nodes

@@ -32,13 +32,14 @@ lemma lemma_MetaIsMetImpliesItsDepsAreMet(
 )
     requires 0 < i 
     requires IsValidBehaviorPrefix(b, i)
-    requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
+    // requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
     requires MetaValid(meta)
     requires AVersionIsMetOnAllServers(b, i, meta.key, meta.vc)
     requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
     ensures AllVersionsInDepsAreMetOnAllServers(b, i, meta.deps)
 {
      if i <= 1 {
+        lemma_BehaviorValidImpliesOneStepValid(b, i);
         assert CMNext(b[i-1], b[i]);
         lemma_MetaIsMetImpliesItsDepsAreMetForIndexOne(b, i, meta);
         return;
@@ -128,7 +129,23 @@ lemma {:axiom} lemma_IosIsPropagationTail(
     ensures ios[0].r in b[i-1].environment.sentPackets
     ensures ReceivePropagate(b[i-1].servers[idx].s, b[i].servers[idx].s, ios[0].r, ExtractSentPacketsFromIos(ios))
     ensures ios[0].r.msg.start == b[i-1].servers[idx].s.next
+    ensures ios[0].r.msg.round == 2
     ensures ios[0].r.dst == idx
     ensures ios[0].r.msg.meta == meta
     // ensures forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
+
+lemma {:axiom} lemma_MetaIsMetImpliesAllPreviousMetasAreMet(
+    b:Behavior<CMState>,
+    i:int,
+    meta:Meta,
+    meta2:Meta
+)
+    requires i > 0
+    requires IsValidBehaviorPrefix(b, i)
+    requires MetaValid(meta)
+    requires MetaValid(meta2)
+    requires AVersionIsMetOnAllServers(b, i, meta.key, meta.vc)
+    requires VCHappendsBefore(meta2.vc, meta.vc) || VCEq(meta2.vc, meta.vc)
+    ensures AVersionIsMetOnAllServers(b, i, meta2.key, meta2.vc)
+    
 }

@@ -67,28 +67,29 @@ module CausalMesh_PullDeps_i {
                 var res := GetMetasOfAllDeps(icache, new_deps, todos, domain);
                 res
             else 
-                // var metas := set m | m in icache[k] && (VCHappendsBefore(m.vc, deps[k]) || VCEq(m.vc, deps[k]));
-                if exists m :: m in icache[k] && VCEq(m.vc, deps[k]) then 
-                    var m :| m in icache[k] && VCEq(m.vc, deps[k]);
-                    // var initial := EmptyMeta(k);
-                    // assert forall m :: m in metas ==> forall kk :: kk in m.deps ==> kk in domain;
-                    // var merged := FoldMetaSet(initial, metas, domain);
-                    // var meta := merged.(vc := deps[k]);
-                    var meta := m;
+                var metas := set m | m in icache[k] && (VCHappendsBefore(m.vc, deps[k]) || VCEq(m.vc, deps[k]));
+                // if exists m :: m in icache[k] && VCEq(m.vc, deps[k]) then 
+                if |metas| > 0 then
+                    // var m :| m in icache[k] && VCEq(m.vc, deps[k]);
+                    var initial := EmptyMeta(k);
+                    assert forall m :: m in metas ==> forall kk :: kk in m.deps ==> kk in domain;
+                    var merged := FoldMetaSet(initial, metas, domain);
+                    var meta := merged.(vc := deps[k]);
+                    // var meta := m;
                     
-                    // lemma_FoldMetaBounded(initial, metas, deps[k], domain);
-                    assert (VCHappendsBefore(meta.vc, meta.vc) || VCEq(meta.vc, meta.vc));
+                    lemma_FoldMetaBounded(initial, metas, deps[k], domain);
+                    assert (VCHappendsBefore(merged.vc, meta.vc) || VCEq(merged.vc, meta.vc));
 
-                    var new_cache := icache[k:= icache[k] - {meta}];
-                    assert icache[k] >= {meta};
-                    lemma_MapRemoveSubsetOfTheValOfKey(icache, k, {meta});
+                    var new_cache := icache[k:= icache[k] - metas];
+                    assert icache[k] >= metas;
+                    lemma_MapRemoveSubsetOfTheValOfKey(icache, k, metas);
                     assert |new_cache.Values| < |icache.Values|;
 
-                    var res := GetMetasOfAllDeps(new_cache, meta.deps, todos, domain);
+                    var res := GetMetasOfAllDeps(new_cache, merged.deps, todos, domain);
 
                     var todos' := AddMetaToMetaMap(res, meta);
-                    assert forall kk :: kk in meta.deps ==> kk in res && (VCHappendsBefore(meta.deps[kk], res[kk].vc) || VCEq(meta.deps[kk], res[kk].vc));
-                    // assert merged.deps == meta.deps;
+                    assert forall kk :: kk in merged.deps ==> kk in res && (VCHappendsBefore(merged.deps[kk], res[kk].vc) || VCEq(merged.deps[kk], res[kk].vc));
+                    assert merged.deps == meta.deps;
                     lemma_AddMetaToMetaMap(res, meta);
                     
                     assert forall k :: k in todos' ==>

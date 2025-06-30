@@ -17,14 +17,6 @@ import opened Collections__Seqs_s
 import opened Collections__Maps_i
 import opened Collections__Maps2_s
 
-function {:opaque} ConvertBehaviorSeqToImap<T>(s:seq<T>):imap<int, T>
-  requires |s| > 0
-  ensures  imaptotal(ConvertBehaviorSeqToImap(s))
-  ensures  forall i :: 0 <= i < |s| ==> ConvertBehaviorSeqToImap(s)[i] == s[i]
-{
-  imap i {:trigger s[i]} :: if i < 0 then s[0] else if 0 <= i < |s| then s[i] else last(s)
-}
-
 lemma lemma_AllServersAreCausalCutAtAnyTime(
     low_level_behavior:seq<CMState>
 )
