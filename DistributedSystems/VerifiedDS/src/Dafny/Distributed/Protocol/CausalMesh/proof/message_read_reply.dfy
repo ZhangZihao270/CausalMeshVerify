@@ -31,7 +31,7 @@ lemma lemma_ReadReplyHasCorrspondingReadMessage(
     requires 0 <= p_rreply.src < Nodes 
     requires p_rreply.msg.Message_Read_Reply?
     ensures p_read in b[i].environment.sentPackets
-    ensures 0 <= p_read.src < Clients
+    ensures Nodes <= p_read.src < Nodes + Clients
     ensures p_read.msg.Message_Read?
     ensures p_read.msg.key_read == p_rreply.msg.key_rreply
     ensures p_read.dst == p_rreply.src

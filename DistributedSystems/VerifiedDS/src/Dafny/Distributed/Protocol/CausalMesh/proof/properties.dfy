@@ -151,6 +151,21 @@ predicate AllServersAreMet(
             && AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[j].s.ccache)
 }
 
+predicate AllClientsAreMet(
+    b:Behavior<CMState>,
+    i:int
+)
+    requires i > 0
+    requires IsValidBehaviorPrefix(b, i)
+{
+    reveal_ServersAndClientsAreValid();
+    lemma_BehaviorValidImpliesOneStepValid(b, i);
+    assert forall j :: 0 <= j < |b[i].clients| ==> ClientValid(b[i].clients[j].c);
+
+    forall j :: 0 <= j < |b[i].clients| ==>
+        AllVersionsInDepsAreMetOnAllServers(b, i, b[i].clients[j].c.deps)
+}
+
 predicate AllReadDepsAreMet(
     b:Behavior<CMState>,
     i:int
@@ -166,7 +181,7 @@ predicate AllReadDepsAreMet(
         AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_read)
 }
 
-predicate AllWriteDepsAreMet(
+predicate /*{:opaque}*/ AllWriteDepsAreMet(
     b:Behavior<CMState>,
     i:int
 )

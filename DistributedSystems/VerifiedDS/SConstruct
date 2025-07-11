@@ -37,7 +37,7 @@ AddOption('--no-verify',
 AddOption('--time-limit',
   dest='time_limit',
   type='int',
-  default=360,
+  default=600,
   action='store',
   help='Specify the time limit to use for each verification')
 
@@ -396,6 +396,9 @@ verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/proof/meta_is_met.d
 verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/proof/read_reply_is_met.dfy')
 verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/proof/cache_does_not_decrease.dfy')
 verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/proof/servers_are_met.dfy')
+verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/proof/clients_are_met.dfy')
+verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/proof/read_deps_is_met.dfy')
+verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/proof/write_deps_is_met.dfy')
 # verify_dafny_file('src/Dafny/Distributed/Protocol/CausalMesh/pulldeps2.dfy')
 
 

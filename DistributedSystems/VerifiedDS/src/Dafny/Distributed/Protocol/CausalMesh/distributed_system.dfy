@@ -13,16 +13,17 @@ datatype CMState = CMState(
     clients:seq<LClient>
 )
 
-// predicate {:opaque} ServerIdsAreMatch(ps:CMState)
-//     requires |ps.servers| == Nodes
-// {
-//     && (forall i :: 0 <= i < Nodes ==> ps.servers[i].s.id == i)
-// }
+predicate {:opaque} ServerIdsAreMatch(ps:CMState)
+    requires |ps.servers| == Nodes
+{
+    && (forall i :: 0 <= i < Nodes ==> ps.servers[i].s.id == i)
+}
 
 predicate CMComplete(ps:CMState)
 {
     && |ps.servers| == Nodes
     && |ps.clients| == Clients
+    && ServerIdsAreMatch(ps)
 }
 
 predicate ConstantsUnchanged(ps:CMState, ps':CMState)
@@ -39,6 +40,12 @@ predicate CMInit(ps:CMState)
     && (forall i :: 0 <= i < Clients ==> LClientInit(ps.clients[i], Nodes + i))
 }
 
+predicate {:opaque} ServersAndClientsAreValid(ps:CMState, ps':CMState)
+{
+    && (forall c :: c in ps.clients ==> ClientValid(c.c))
+    && (forall c :: c in ps'.clients ==> ClientValid(c.c))
+}
+
 predicate CMNextCommon(ps:CMState, ps':CMState)
 {
     && CMComplete(ps)
@@ -47,6 +54,7 @@ predicate CMNextCommon(ps:CMState, ps':CMState)
     && (forall p :: p in ps'.environment.sentPackets ==> PacketValid(p) && PacketHasCorrectSrcAndDst(p))
     && (forall s :: s in ps.servers ==> ServerValid(s.s))
     && (forall s :: s in ps'.servers ==> ServerValid(s.s))
+    && ServersAndClientsAreValid(ps, ps')
 }
 
 predicate CMNextServer(ps:CMState, ps':CMState, idx:int, ios:seq<CMIo>)

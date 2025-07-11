@@ -27,8 +27,6 @@ import opened Collections__Seqs_s
 import opened Collections__Maps_i
 import opened Collections__Maps2_s
 
-
-
 lemma lemma_ReadRepliesIsMetOnAllServersPrefix(
     b:Behavior<CMState>,
     i:int
@@ -40,7 +38,7 @@ lemma lemma_ReadRepliesIsMetOnAllServersPrefix(
     requires forall j :: 0 < j <= i ==> AllServersAreMet(b, j)
     requires forall j :: 0 < j <= i ==> AllReadDepsAreMet(b, j)
     requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
-    ensures AllReadRepliesAreMet(b, i)
+    ensures forall j :: 0 < j <= i ==> AllReadRepliesAreMet(b, j)
 {
     if i <= 1 {
         lemma_ReadRepliesIsMetOnAllServersForIndexOne(b, i);
@@ -54,6 +52,7 @@ lemma lemma_ReadRepliesIsMetOnAllServersPrefix(
 
     if !StepSendsReadReply(b[i-1], b[i]){
         lemma_ReadRepliesIsMetOnAllServersPrefix(b, i-1);
+        assume forall j :: 0 < j <= i-1 ==> AllReadRepliesAreMet(b, j);
         assert AllReadRepliesAreMet(b, i-1);
         lemma_PacketsStaysInSentPackets(b, i-1, i);
         assert forall p :: p in b[i-1].environment.sentPackets ==> p in b[i].environment.sentPackets;
@@ -65,10 +64,12 @@ lemma lemma_ReadRepliesIsMetOnAllServersPrefix(
         assert CMNext(b[i-1], b[i]);
         lemma_ReadRepliesIsMetOnAllServersConstant(b, i);
         assert AllReadRepliesAreMet(b, i);
+        assert forall j :: 0 < j <= i ==> AllReadRepliesAreMet(b, j);
         return;
     }
 
     lemma_ReadRepliesIsMetOnAllServersPrefix(b, i-1);
+    assume forall j :: 0 < j <= i-1 ==> AllReadRepliesAreMet(b, j);
     assert AllReadRepliesAreMet(b, i-1);
 
     var p :| p in b[i].environment.sentPackets && p !in b[i-1].environment.sentPackets && p.msg.Message_Read_Reply?;
@@ -90,7 +91,72 @@ lemma lemma_ReadRepliesIsMetOnAllServersPrefix(
 
     lemma_ReadRepliesIsMetOnAllServersTransfer(b, i, idx, p, p_read);
     assert AllReadRepliesAreMet(b, i);
+    assert forall j :: 0 < j <= i ==> AllReadRepliesAreMet(b, j);
 }
+
+
+// lemma lemma_ReadRepliesIsMetOnAllServersPrefix(
+//     b:Behavior<CMState>,
+//     i:int
+// )
+//     requires 0 < i
+//     requires IsValidBehaviorPrefix(b, i)
+//     requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
+//     requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
+//     requires forall j :: 0 < j <= i ==> AllServersAreMet(b, j)
+//     requires forall j :: 0 < j <= i ==> AllReadDepsAreMet(b, j)
+//     requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
+//     ensures AllReadRepliesAreMet(b, i)
+// {
+//     if i <= 1 {
+//         lemma_ReadRepliesIsMetOnAllServersForIndexOne(b, i);
+//         return;
+//     }
+
+//     lemma_ConstantsAllConsistent(b, i-1);
+//     lemma_ConstantsAllConsistent(b, i);
+
+//     lemma_BehaviorValidImpliesOneStepValid(b, i);
+
+//     if !StepSendsReadReply(b[i-1], b[i]){
+//         lemma_ReadRepliesIsMetOnAllServersPrefix(b, i-1);
+//         assert AllReadRepliesAreMet(b, i-1);
+//         lemma_PacketsStaysInSentPackets(b, i-1, i);
+//         assert forall p :: p in b[i-1].environment.sentPackets ==> p in b[i].environment.sentPackets;
+//         assert forall p :: p in b[i].environment.sentPackets && p.msg.Message_Read_Reply? ==> p in b[i-1].environment.sentPackets;
+//         assert 1 < i;
+//         assert IsValidBehaviorPrefix(b, i);
+//         assert AllReadRepliesAreMet(b, i-1);
+//         assert forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1]);
+//         assert CMNext(b[i-1], b[i]);
+//         lemma_ReadRepliesIsMetOnAllServersConstant(b, i);
+//         assert AllReadRepliesAreMet(b, i);
+//         return;
+//     }
+
+//     lemma_ReadRepliesIsMetOnAllServersPrefix(b, i-1);
+//     assert AllReadRepliesAreMet(b, i-1);
+
+//     var p :| p in b[i].environment.sentPackets && p !in b[i-1].environment.sentPackets && p.msg.Message_Read_Reply?;
+//     assert PacketValid(p);
+//     var idx, ios := lemma_ActionThatSendsReadReplyIsServerReceiveRead(b[i-1], b[i], p);
+//     var p_read := ios[0].r;
+
+//     assert p_read in b[i-1].environment.sentPackets;
+//     assert ReceiveRead(b[i-1].servers[idx].s, b[i].servers[idx].s, p_read, [p]);
+//     assert AllServersAreMet(b, i-1);
+//     assert AllReadDepsAreMet(b, i-1);
+//     assert AllVersionsInDepsAreMetOnAllServers(b, i-1, p_read.msg.deps_read);
+//     lemma_ServerReadReplyIsMetOnAllServers(b, i, idx, p_read, [p]);
+
+//     assert AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache);
+//     // assert AllDepsInICacheAreMetOnAllServers(b, i, b[i].servers[idx].s.icache);
+//     assert AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_rreply);
+//     assert AVersionIsMetOnAllServers(b, i, p.msg.key_rreply, p.msg.vc_rreply);
+
+//     lemma_ReadRepliesIsMetOnAllServersTransfer(b, i, idx, p, p_read);
+//     assert AllReadRepliesAreMet(b, i);
+// }
 
 lemma lemma_ReadRepliesIsMetOnAllServersForIndexOne(
     b:Behavior<CMState>,

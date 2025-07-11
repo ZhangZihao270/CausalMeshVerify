@@ -41,6 +41,30 @@ import opened Collections__Maps_i
     ios :| CMNextServer(b[i], b[i+1], idx, ios);
   }
 
+  lemma lemma_ActionThatChangesClientIsThatClientsAction(
+    b:Behavior<CMState>,
+    i:int,
+    idx:int
+  )
+    returns (ios:seq<CMIo>)
+    requires IsValidBehaviorPrefix(b, i+1)
+    requires 0 <= i
+    requires 0 <= idx < |b[i].clients|
+    requires 0 <= idx < |b[i+1].clients|
+    requires b[i+1].clients[idx] != b[i].clients[idx]
+    ensures  b[i].environment.nextStep.LEnvStepHostIos?
+    ensures  0 <= idx < Clients
+    ensures  b[i].environment.nextStep.actor == idx + Nodes
+    ensures  ios == b[i].environment.nextStep.ios
+    ensures  CMNext(b[i], b[i+1])
+    ensures  CMNextClient(b[i], b[i+1], idx, ios)
+  {
+    lemma_AssumptionsMakeValidTransition(b, i);
+
+    assert CMNext(b[i], b[i+1]);
+    ios :| CMNextClient(b[i], b[i+1], idx, ios);
+  }
+
   function {:opaque} ConvertBehaviorSeqToImap<T>(s:seq<T>):imap<int, T>
     requires |s| > 0
     ensures  imaptotal(ConvertBehaviorSeqToImap(s))

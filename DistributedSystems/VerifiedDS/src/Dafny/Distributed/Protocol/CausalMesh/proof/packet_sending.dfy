@@ -123,7 +123,7 @@ lemma lemma_ActionThatSendsReadIsClientSendRead(
     ios:seq<CMIo>
 )
     requires Nodes <= p.src < Nodes + Clients
-    requires p.msg.Message_Read_Reply?
+    requires p.msg.Message_Read?
     requires p in ps'.environment.sentPackets
     requires p !in ps.environment.sentPackets
     requires CMNext(ps, ps')
@@ -131,6 +131,29 @@ lemma lemma_ActionThatSendsReadIsClientSendRead(
     ensures CMNextClient(ps, ps', idx, ios)
     ensures LIoOpSend(p) in ios
     ensures SendRead(ps.clients[idx].c, ps'.clients[idx].c, [p])
+{
+    assert ps.environment.nextStep.LEnvStepHostIos?;
+    assert LIoOpSend(p) in ps.environment.nextStep.ios;
+    idx, ios :| CMNextClient(ps, ps', idx, ios) && LIoOpSend(p) in ios;
+}
+
+lemma lemma_ActionThatSendsWriteIsClientSendWrite(
+    ps:CMState,
+    ps':CMState,
+    p:Packet
+) returns (
+    idx:int,
+    ios:seq<CMIo>
+)
+    requires Nodes <= p.src < Nodes + Clients
+    requires p.msg.Message_Write?
+    requires p in ps'.environment.sentPackets
+    requires p !in ps.environment.sentPackets
+    requires CMNext(ps, ps')
+    ensures 0 <= idx < Clients
+    ensures CMNextClient(ps, ps', idx, ios)
+    ensures LIoOpSend(p) in ios
+    ensures SendWrite(ps.clients[idx].c, ps'.clients[idx].c, [p])
 {
     assert ps.environment.nextStep.LEnvStepHostIos?;
     assert LIoOpSend(p) in ps.environment.nextStep.ios;

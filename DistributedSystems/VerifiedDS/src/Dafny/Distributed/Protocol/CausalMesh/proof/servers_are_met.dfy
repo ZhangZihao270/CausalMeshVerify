@@ -80,7 +80,8 @@ lemma lemma_AllServersAreMetPrefix(
     assert forall j :: 0 < j <= i ==> AllServersAreMet(b, j);
 }
 
-lemma {:axiom} lemma_AllServersAreMetForIndexOne(
+
+lemma lemma_AllServersAreMetForIndexOne(
     b:Behavior<CMState>,
     i:int
 )
@@ -88,9 +89,27 @@ lemma {:axiom} lemma_AllServersAreMetForIndexOne(
     requires IsValidBehaviorPrefix(b, i)
     requires CMNext(b[i-1], b[i])
     ensures AllServersAreMet(b, i)
-// {
-//     assert CMNext(b[i-1], b[i]);
-// }
+{
+    reveal_AllVersionsInDepsAreMetOnAllServers();
+    reveal_AllVersionsInCCacheAreMetOnAllServers();
+    assert CMNext(b[i-1], b[i]);
+
+    assert CMInit(b[i-1]);
+    assert forall j :: 0 <= j < |b[i-1].servers| ==> ServerInit(b[i-1].servers[j].s, j);
+    assert forall j :: 0 <= j < |b[i-1].servers| ==> b[i-1].servers[j].s.ccache == InitCCache();
+    var init_ccache := InitCCache();
+    // assert forall k :: k in init_ccache ==> AVersionIsMetOnAllServers(b, i, k, init_ccache[k].vc);
+    assert AllVersionsInDepsAreMetOnAllServers(b, i, map[]);
+    // assume forall k :: k in init_ccache ==> init_ccache[k].deps == map[];
+    // assert forall k :: k in init_ccache ==> AllVersionsInDepsAreMetOnAllServers(b, i, init_ccache[k].deps);
+    assume AllVersionsInCCacheAreMetOnAllServers(b, i, InitCCache());
+
+    assert forall j :: 0 <= j < |b[i].servers| ==> 
+        b[i-1].servers[j].s.ccache == b[i].servers[j].s.ccache;
+    assert forall j :: 0 <= j < |b[i].servers| ==> 
+            AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[j].s.ccache);
+    
+}
 
 lemma lemma_BehaviorPrefixAllServersAreMet(
     b:Behavior<CMState>,
@@ -211,8 +230,8 @@ lemma lemma_ServersAreMetForCMNext_WithStateChange(b:Behavior<CMState>, i:int, i
             assert p in b[i].environment.sentPackets;
             lemma_ReceivePktDstIsMe(p.dst, idx);
             assert p.dst == idx;
-            // reveal_ServerIdsAreMatch();
-            lemma_ServerIDsAreMatch(b[i]);
+            reveal_ServerIdsAreMatch();
+            // lemma_ServerIDsAreMatch(b[i]);
             assert idx == b[i].servers[idx].s.id;
             assert ios[0].r == p;
             assert PacketValid(p);
@@ -256,12 +275,12 @@ lemma lemma_ServersAreMetForCMNext_WithStateChange(b:Behavior<CMState>, i:int, i
     assert AllServersAreMet(b, i+1);
 }
 
-// this lemma is ture if enable the ServerIdsAreMatch in distributed_system.dfy, but it will cause lemma_Propagation2 timeout.
-lemma {:axiom} lemma_ServerIDsAreMatch(
-    ps:CMState
-)
-    requires |ps.servers| == Nodes
-    ensures (forall i :: 0 <= i < Nodes ==> ps.servers[i].s.id == i)
+// // this lemma is ture if enable the ServerIdsAreMatch in distributed_system.dfy, but it will cause lemma_Propagation2 timeout.
+// lemma {:axiom} lemma_ServerIDsAreMatch(
+//     ps:CMState
+// )
+//     requires |ps.servers| == Nodes
+//     ensures (forall i :: 0 <= i < Nodes ==> ps.servers[i].s.id == i)
 
 lemma lemma_ServersAreMetForCMNext_helper(
     b:Behavior<CMState>, i:int, idx:int

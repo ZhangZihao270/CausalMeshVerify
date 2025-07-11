@@ -901,7 +901,7 @@ module CausalMesh_Cache_i {
             && SpontaneousIos(ios, 0)
             && SendRead(s, s', sent_packets)
         else 
-            && nextActionIndex == 3
+            && nextActionIndex == 2
             && SpontaneousIos(ios, 0)
             && SendWrite(s, s', sent_packets)
     }
