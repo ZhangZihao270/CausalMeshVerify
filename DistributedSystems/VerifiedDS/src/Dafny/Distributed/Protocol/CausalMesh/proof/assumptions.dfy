@@ -35,4 +35,35 @@ lemma lemma_BehaviorValidImpliesOneStepValid(
     assert CMNext(b[j], b[j+1]);
 }
 
+lemma lemma_BehaviorValidImpliesAllStepsValid(
+    b:Behavior<CMState>,
+    i:int
+)
+    requires 0 < i
+    requires IsValidBehaviorPrefix(b, i)
+    ensures forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
+{
+    if i == 0 {
+      return;
+    }
+
+    if i == 1 {
+      // assert (forall j {:trigger CMNext(b[j], b[j+1])} :: 0 <= j < i ==> CMNext(b[j], b[j+1]));
+      // var j := i-1;
+      // assert j == 0;
+      // assert 
+      // assert CMNext(b[0], b[1]);
+      lemma_BehaviorValidImpliesOneStepValid(b, i);
+      assert CMNext(b[0], b[1]);
+      return;
+    }
+
+    lemma_BehaviorValidImpliesAllStepsValid(b, i-1);
+    assume forall j :: 0 <= j < i-1 ==> CMNext(b[j], b[j+1]);
+
+    lemma_BehaviorValidImpliesOneStepValid(b, i);
+    assert CMNext(b[i-1], b[i]);
+    assume forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1]);
+}
+
 }

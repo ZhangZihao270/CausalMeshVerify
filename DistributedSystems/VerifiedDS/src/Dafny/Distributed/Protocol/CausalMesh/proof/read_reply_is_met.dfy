@@ -31,16 +31,20 @@ lemma lemma_ReadRepliesIsMetOnAllServersPrefix(
     b:Behavior<CMState>,
     i:int
 )
-    requires 0 < i
+    requires 0 <= i
     requires IsValidBehaviorPrefix(b, i)
-    requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
+    // requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
     requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
     requires forall j :: 0 < j <= i ==> AllServersAreMet(b, j)
     requires forall j :: 0 < j <= i ==> AllReadDepsAreMet(b, j)
     requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
     ensures forall j :: 0 < j <= i ==> AllReadRepliesAreMet(b, j)
 {
-    if i <= 1 {
+    if i == 0 {
+        return;
+    }
+    
+    if i == 1 {
         lemma_ReadRepliesIsMetOnAllServersForIndexOne(b, i);
         return;
     }

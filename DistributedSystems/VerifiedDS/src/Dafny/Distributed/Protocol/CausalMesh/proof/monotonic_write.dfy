@@ -103,7 +103,7 @@ lemma lemma_MonotonicWritePrefix(
 )
     requires i >= 0
     requires IsValidBehaviorPrefix(b, i)
-    requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
+    // requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
     ensures forall j :: 0 < j <= i ==> AllWriteReplyHasCoorspondingWriteWithSmallerOrEqVCInDepsAndLocals(b, j)
 {
     if i == 0 {
@@ -125,12 +125,17 @@ lemma lemma_WriteReplyHasHigerVCThanDepsAndLocalPrefix(
 )
     requires 0 < i 
     requires IsValidBehaviorPrefix(b, i)
-    requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
+    // requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
     ensures AllWriteReplyHasCoorspondingWriteWithSmallerOrEqVCInDepsAndLocals(b, i)
     decreases i
 {
-    if i <= 1 {
+    if i == 0 {
+        return;
+    }
+
+    if i == 1 {
         // assume AllWriteReplyHasCoorspondingWriteWithSmallerOrEqVCInDepsAndLocals(b, i);
+        lemma_BehaviorValidImpliesOneStepValid(b, i);
         assert CMNext(b[i-1], b[i]);
         lemma_WriteReplyHasCorrspondingWriteWithSmallerVCForIndexOne(b, i);
         return;
@@ -138,6 +143,8 @@ lemma lemma_WriteReplyHasHigerVCThanDepsAndLocalPrefix(
 
     lemma_ConstantsAllConsistent(b, i-1);
     lemma_ConstantsAllConsistent(b, i);
+
+    lemma_BehaviorValidImpliesAllStepsValid(b, i);
 
     if !StepSendsWriteReply(b[i-1], b[i]){
         // assume AllWriteReplyHasCoorspondingWriteWithSmallerOrEqVCInDepsAndLocals(b, i-1);

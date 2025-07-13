@@ -156,24 +156,6 @@ lemma lemma_VersionsAfterPullDepsAreMetOnAllServers(
     assert AllVersionsInCCacheAreMetOnAllServers(b, i, res.1);
 }
 
-// lemma {:axiom} lemma_AllMeatsAreMetImpliesMergedMetaIsMet(
-//     b:Behavior<CMState>,
-//     i:int,
-//     initial:Meta, metas:set<Meta>, domain:set<Key> 
-// )
-//     requires i > 0
-//     requires IsValidBehaviorPrefix(b, i)
-//     requires CMNext(b[i-1], b[i])
-//     requires MetaValid(initial)
-//     requires forall kk :: kk in initial.deps ==> kk in domain
-//     requires forall m :: m in metas ==> MetaValid(m) && m.key == initial.key && (forall kk :: kk in m.deps ==> kk in domain)
-//     requires forall kk :: kk in initial.deps ==> AVersionIsMetOnAllServers(b, i, kk, initial.deps[kk])
-//     requires forall m :: m in metas ==> forall kk :: kk in m.deps ==> AVersionIsMetOnAllServers(b, i, kk, m.deps[kk])
-//     ensures var merged := FoldMetaSet(initial, metas, domain);
-//             forall kk :: kk in merged.deps ==> AVersionIsMetOnAllServers(b, i, kk, merged.deps[kk])
-// // {
-    
-// // }
 
 lemma {:axiom} lemma_MetaMapIsMetImpliesInsertedMataMapIsMet(
     b:Behavior<CMState>,
@@ -195,17 +177,6 @@ lemma {:axiom} lemma_MetaMapIsMetImpliesInsertedMataMapIsMet(
 // {
 
 // }
-
-// lemma {:axiom} lemma_AllVersionsInDepsAreMetOnAllServers(
-//     b:Behavior<CMState>,
-//     i:int,
-//     deps:Dependency
-// )
-//     requires i > 0
-//     requires IsValidBehaviorPrefix(b, i)
-//     requires CMNext(b[i-1], b[i])
-//     requires DependencyValid(deps)
-//     ensures AllVersionsInDepsAreMetOnAllServers(b, i, deps)
 
 lemma lemma_MetaIsMetImpliesMetasBeforeItAreMet(
     b:Behavior<CMState>,
@@ -564,8 +535,6 @@ function GetMetasOfAllDepsGlobalView(
 //                 res
 // }
 
-// lemma {:axiom} lemma_TwoMetaMapAreEqual(m1:map<Key, Meta>, m2:map<Key, Meta>)
-//     ensures m1 == m2
 
 lemma {:axiom} lemma_GetMetasOfAllDepsGlobalViewEqualsToGetMetasOfAllDeps
 (

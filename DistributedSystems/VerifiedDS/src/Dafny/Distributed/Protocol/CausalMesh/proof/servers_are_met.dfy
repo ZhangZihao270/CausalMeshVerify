@@ -275,12 +275,6 @@ lemma lemma_ServersAreMetForCMNext_WithStateChange(b:Behavior<CMState>, i:int, i
     assert AllServersAreMet(b, i+1);
 }
 
-// // this lemma is ture if enable the ServerIdsAreMatch in distributed_system.dfy, but it will cause lemma_Propagation2 timeout.
-// lemma {:axiom} lemma_ServerIDsAreMatch(
-//     ps:CMState
-// )
-//     requires |ps.servers| == Nodes
-//     ensures (forall i :: 0 <= i < Nodes ==> ps.servers[i].s.id == i)
 
 lemma lemma_ServersAreMetForCMNext_helper(
     b:Behavior<CMState>, i:int, idx:int

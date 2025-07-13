@@ -33,8 +33,8 @@ lemma lemma_CMNextCacheDoesNotDecreasePrefix(
     i:int
 )
     requires 0 <= i 
-    requires IsValidBehaviorPrefix(b, i+1)
-    requires forall j :: 0 <= j <= i ==> CMNext(b[j], b[j+1])
+    requires IsValidBehaviorPrefix(b, i)
+    // requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
     // requires AllServersAreCausalCut(b[0])
     ensures forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
     decreases i
@@ -50,9 +50,10 @@ lemma lemma_CMNextCacheDoesNotDecreasePrefix(
     assert CMNext(b[i-1], b[i]);
 
     lemma_CMNextCacheDoesNotDecreasePrefix(b, i-1);
-    assert forall j :: 0 <= j < i - 1 ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1]);
+    assume forall j :: 0 <= j < i - 1 ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1]);
     lemma_CMNextCacheDoesNotDecrease(b, i-1);
     assert ServerNextDoesNotDecreaseVersions(b[i-1], b[i]);
+    lemma_BehaviorValidImpliesAllStepsValid(b, i);
     lemma_CMNextCacheDoesNotDecreasePrefix_helper(b, i);
     assert forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1]);
 }
@@ -63,14 +64,24 @@ lemma lemma_CMNextCacheDoesNotDecreasePrefix_helper(
 )
     requires 0 <= i 
     requires IsValidBehaviorPrefix(b, i)
-    requires forall j :: 0 <= j <= i ==> CMNext(b[j], b[j+1])
+    requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
     requires CMNext(b[i-1], b[i])
     requires forall j :: 0 <= j < i - 1 ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
     requires ServerNextDoesNotDecreaseVersions(b[i-1], b[i])
     ensures forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
     decreases i
 {
-
+    forall j | 0 <= j < i 
+        ensures ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
+    {
+        if j < i - 1 {
+            assert ServerNextDoesNotDecreaseVersions(b[j], b[j+1]);
+        } else {
+            assert j == i-1;
+            assert ServerNextDoesNotDecreaseVersions(b[i-1], b[i]);
+        }
+        assert ServerNextDoesNotDecreaseVersions(b[j], b[j+1]);
+    }
 }
 
 lemma lemma_CMNextCacheDoesNotDecrease(b:Behavior<CMState>, i:int)

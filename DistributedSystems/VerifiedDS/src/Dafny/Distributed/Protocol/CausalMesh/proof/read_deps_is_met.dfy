@@ -30,7 +30,7 @@ lemma lemma_ReadDepsIsMetOnAllServersPrefix(
     b:Behavior<CMState>,
     i:int
 )
-    requires 0 < i
+    requires 0 <= i
     requires IsValidBehaviorPrefix(b, i)
     requires forall j :: 0 < j <= i ==> AllClientsAreMet(b, j)
     requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])

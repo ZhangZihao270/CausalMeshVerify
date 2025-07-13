@@ -27,7 +27,7 @@ lemma lemma_MonotonicRead(
 )
     requires |low_level_behavior| > 0 
     requires CMInit(low_level_behavior[0])
-    requires forall i :: 
+    requires forall i {:trigger CMNext(low_level_behavior[i], low_level_behavior[i+1])} ::
                 0 <= i < |low_level_behavior| - 1 ==> CMNext(low_level_behavior[i], low_level_behavior[i+1])
     ensures var b := ConvertBehaviorSeqToImap(low_level_behavior);
         forall i :: 0 <= i < |low_level_behavior| ==> MonotonicRead(b, i)
@@ -39,6 +39,7 @@ lemma lemma_MonotonicRead(
     }
     else
     { 
+        lemma_BehaviorValidImpliesAllStepsValid(b, |low_level_behavior| - 1);
         assert forall j {:trigger CMNext(b[j], b[j+1])} :: 0 <= j < |low_level_behavior| - 1 ==> CMNext(b[j], b[j+1]); 
         assert forall j :: 0 <= j < |low_level_behavior| - 1 ==> CMNext(b[j], b[j+1]);
         // lemma_ReadReplyHasHigherVCThanDepsPrefix(b, |low_level_behavior| - 1);

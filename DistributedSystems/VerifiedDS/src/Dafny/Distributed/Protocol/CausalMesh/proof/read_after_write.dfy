@@ -32,7 +32,7 @@ lemma lemma_ReadAWriteCanObserveAllItsPreviousReadsAndWrites(
 )
     requires |behavior| > 0 
     requires CMInit(behavior[0])
-    requires forall i :: 
+    requires forall i {:trigger CMNext(behavior[i], behavior[i+1])} :: 
                 0 <= i < |behavior| - 1 ==> CMNext(behavior[i], behavior[i+1])
     ensures var b := ConvertBehaviorSeqToImap(behavior);
         forall i :: 0 <= i < |behavior| ==> AllReadReplyVCIsLargerThanAllPreviousWritesReal(b, i) 
@@ -46,6 +46,7 @@ lemma lemma_ReadAWriteCanObserveAllItsPreviousReadsAndWrites(
     }
     else
     { 
+        lemma_BehaviorValidImpliesAllStepsValid(b, |behavior| - 1);
         assert forall j {:trigger CMNext(b[j], b[j+1])} :: 0 <= j < |behavior| - 1 ==> CMNext(b[j], b[j+1]); 
         assert forall j :: 0 <= j < |behavior| - 1 ==> CMNext(b[j], b[j+1]);
         // lemma_ReadReplyHasHigherVCThanDepsPrefix(b, |low_level_behavior| - 1);
