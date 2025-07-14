@@ -227,6 +227,18 @@ module CausalMesh_Types_i {
             FoldMetaSet2(MetaMerge(acc, x), metas - {x})
     }
 
+    lemma lemma_FoldEmptyMetasResultInEmptyMeta(
+        acc: Meta, metas: set<Meta>
+    )
+        requires MetaValid(acc)
+        requires forall m :: m in metas ==> MetaValid(m) && m.key == acc.key && m == EmptyMeta(m.key)
+        requires acc == EmptyMeta(acc.key)
+        ensures var res := FoldMetaSet2(acc, metas);
+                res == EmptyMeta(acc.key)
+    {
+
+    }
+
     // lemma VCMergeBounded(metas: set<Meta>, bound: VectorClock)
     //     requires forall m :: m in metas ==> VCHappendsBefore(m.vc, bound) || VCEq(m.vc, bound)
     //     ensures VCHappendsBefore(FoldMetaSet(metas).vc, bound) || VCEq(FoldMetaSet(metas).vc, bound)

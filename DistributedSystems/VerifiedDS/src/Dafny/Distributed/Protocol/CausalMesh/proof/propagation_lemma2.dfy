@@ -363,12 +363,12 @@ returns (nodes:seq<int>)
 //     }
 // }
 
-lemma {:axiom} lemma_DepsIsMet(icache:ICache, ccache:CCache, deps:Dependency)
-    requires ICacheValid(icache)
-    requires CCacheValid(ccache)
-    requires forall k :: k in Keys_domain ==> k in icache && k in ccache
-    requires DependencyValid(deps)
-    ensures DepsIsMet(icache, ccache, deps)
+// lemma {:axiom} lemma_DepsIsMet(icache:ICache, ccache:CCache, deps:Dependency)
+//     requires ICacheValid(icache)
+//     requires CCacheValid(ccache)
+//     requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+//     requires DependencyValid(deps)
+//     ensures DepsIsMet(icache, ccache, deps)
 
 lemma {:axiom} lemma_AVersionOfAKeyIsMetIsTransitive(
     b:Behavior<CMState>,

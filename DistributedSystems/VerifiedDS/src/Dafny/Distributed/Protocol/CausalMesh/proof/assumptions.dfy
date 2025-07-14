@@ -66,4 +66,14 @@ lemma lemma_BehaviorValidImpliesAllStepsValid(
     assume forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1]);
 }
 
+/** if a version has dependency, then its vc is larder than 0 */
+lemma {:axiom} lemma_MetaWithNonEmptyDepsImpliesTheVCLargerThanZero(
+  m:Meta
+)
+  requires MetaValid(m)
+  requires |m.deps| > 0
+  ensures VCHappendsBefore(EmptyMeta(m.key).vc, m.vc)
+// {
+
+// }
 }

@@ -5,6 +5,7 @@ include "environment.dfy"
 include "deps_are_met.dfy"
 include "read_reply_is_met.dfy"
 include "propagation.dfy"
+include "meta_is_met.dfy"
 include "../../../Common/Collections/Seqs.s.dfy"
 
 module CausalMesh_Proof_ServersAreMet_i {
@@ -26,6 +27,9 @@ import opened CausalMesh_Proof_DepsAreMet_i
 import opened CausalMesh_Proof_ReadReplyIsMet_i
 import opened CausalMesh_Proof_Propagation_i
 import opened CausalMesh_Proof_PropagationLemma2_i
+import opened CausalMesh_Proof_PropagationLemma3_i
+import opened CausalMesh_Proof_MetaIsMet_i
+import opened CausalMesh_Proof_AllwaysMet_i
 import opened Collections__Seqs_s
 import opened Collections__Maps_i
 import opened Collections__Maps2_s
@@ -130,8 +134,9 @@ lemma lemma_ServersAreMetForCMNext(b:Behavior<CMState>, i:int)
     requires CMNext(b[i], b[i+1])
     requires AllServersAreMet(b, i)
     requires forall j :: 0 < j <= i+1 ==> AllWriteDepsAreMet(b, j)
+    requires forall j :: 0 <= j < i+1 ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
     requires AllReadDepsAreMet(b, i)
-    requires ServerNextDoesNotDecreaseVersions(b[i], b[i+1])
+    // requires ServerNextDoesNotDecreaseVersions(b[i], b[i+1])
     ensures AllServersAreMet(b, i+1)
 {
     var ps := b[i];
@@ -164,10 +169,11 @@ lemma lemma_ServersAreMetForCMNext_WithStateChange(b:Behavior<CMState>, i:int, i
     requires CMNext(b[i], b[i+1])
     requires AllServersAreMet(b, i)
     requires forall j :: 0 < j <= i+1 ==> AllWriteDepsAreMet(b, j)
+    requires forall j :: 0 <= j < i+1 ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
     // requires AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache)
     // requires AllVersionsInDepsAreMetOnAllServers(b, i-1, p.msg.deps_read)
     requires AllReadDepsAreMet(b, i)
-    requires ServerNextDoesNotDecreaseVersions(b[i], b[i+1])
+    // requires ServerNextDoesNotDecreaseVersions(b[i], b[i+1])
     ensures AllServersAreMet(b, i+1)
 {
     var s := b[i].servers[idx].s;
@@ -242,8 +248,9 @@ lemma lemma_ServersAreMetForCMNext_WithStateChange(b:Behavior<CMState>, i:int, i
             lemma_PropagationAtTail(b, i+1, idx, p, ios);
             lemma_PropagationAtTail2(b, i+1, idx, p, ios);
 
-            assert AllVersionsInDepsAreMetOnAllServers(b, i+1, p.msg.meta.deps);
             assert AVersionIsMetOnAllServers(b, i+1, p.msg.key, p.msg.meta.vc);
+            // lemma_MetaIsMetImpliesItsDepsAreMet(b, i+1, p.msg.meta);
+            assert AllVersionsInDepsAreMetOnAllServers(b, i+1, p.msg.meta.deps);
 
             lemma_PropagationToTheTailImpliesTheDepsAreMetOnAllServers(b, i, p.msg.meta.deps);
             assert AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.meta.deps);
