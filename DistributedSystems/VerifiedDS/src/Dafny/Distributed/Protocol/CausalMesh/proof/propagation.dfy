@@ -38,6 +38,7 @@ lemma lemma_PropagationAtTail(
     // requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
     requires CMNext(b[i-1], b[i])
     requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
+    requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
     requires 0 <= idx < Nodes
     requires |ios| > 0
     requires ios[0].LIoOpReceive?

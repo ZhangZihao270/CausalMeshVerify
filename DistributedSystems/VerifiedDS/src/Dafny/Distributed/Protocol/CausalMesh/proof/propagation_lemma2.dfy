@@ -3,6 +3,7 @@ include "../distributed_system.dfy"
 include "packet_sending.dfy"
 include "properties.dfy"
 include "propagation_lemma.dfy"
+include "always_met.dfy"
 include "../../../Common/Collections/Seqs.s.dfy"
 
 module CausalMesh_Proof_PropagationLemma2_i {
@@ -19,7 +20,7 @@ import opened CausalMesh_Proof_Constants_i
 import opened CausalMesh_Proof_PropagationLemma_i
 import opened CausalMesh_Proof_PacketSending_i
 import opened CausalMesh_Proof_Properties_i
-// import opened CausalMesh_Proof_MessageReadReply_i
+import opened CausalMesh_Proof_AllwaysMet_i
 import opened Collections__Seqs_s
 import opened Collections__Maps_i
 import opened Collections__Maps2_s
@@ -56,6 +57,7 @@ returns (nodes:seq<int>)
     // requires forall n :: n in nodes ==> 0 <= n < Nodes
     requires PacketValid(p)
     requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
+    requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
     ensures |nodes| > 1
     ensures nodes[0] == p.msg.start
     ensures nodes[|nodes|-2] == p.src
@@ -363,14 +365,7 @@ returns (nodes:seq<int>)
 //     }
 // }
 
-// lemma {:axiom} lemma_DepsIsMet(icache:ICache, ccache:CCache, deps:Dependency)
-//     requires ICacheValid(icache)
-//     requires CCacheValid(ccache)
-//     requires forall k :: k in Keys_domain ==> k in icache && k in ccache
-//     requires DependencyValid(deps)
-//     ensures DepsIsMet(icache, ccache, deps)
-
-lemma {:axiom} lemma_AVersionOfAKeyIsMetIsTransitive(
+lemma lemma_AVersionOfAKeyIsMetIsTransitive(
     b:Behavior<CMState>,
     i:int,
     key:Key,
@@ -378,9 +373,10 @@ lemma {:axiom} lemma_AVersionOfAKeyIsMetIsTransitive(
     deps:Dependency,
     nodes:seq<int>
 )
-    requires 0 < i 
+    requires 1 < i 
     requires IsValidBehaviorPrefix(b, i)
     requires CMNext(b[i-1], b[i])
+    requires ServerNextDoesNotDecreaseVersions(b[i-1], b[i])
     requires key in Keys_domain
     requires VectorClockValid(vc)
     requires DependencyValid(deps)
@@ -390,12 +386,31 @@ lemma {:axiom} lemma_AVersionOfAKeyIsMetIsTransitive(
     requires forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, deps)
     ensures forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, key, vc)
     ensures forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, deps)
-// {
-//     var j :| 0 <= j < |nodes| - 1;
-//     var s := b[i-1].servers[nodes[j]].s;
-//     var s' := b[i].servers[nodes[j]].s;
-//     assume forall k :: k in s.ccache ==> k in s'.ccache && (VCHappendsBefore(s.ccache[k].vc, s'.ccache[k].vc) || VCEq(s.ccache[k].vc, s'.ccache[k].vc));
-// }
+{
+    forall j | 0 <= j < |nodes| - 1
+        ensures AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, key, vc)
+        ensures DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, deps)
+    {
+        assert AVersionOfAKeyIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, key, vc);
+        lemma_AVersionIsMetWillAlwaysMet(
+            b[i-1].servers[nodes[j]].s.icache,
+            b[i].servers[nodes[j]].s.icache,
+            b[i-1].servers[nodes[j]].s.ccache,
+            b[i].servers[nodes[j]].s.ccache,
+            key, vc
+        );
+        assert AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, key, vc);
+
+        // reveal_DepsIsMet();
+        assert DepsIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, deps);
+        lemma_DepsIsMetWillAlwaysMet(b, i, nodes[j], deps);
+        assert DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, deps);
+    }
+    // var j :| 0 <= j < |nodes| - 1;
+    // var s := b[i-1].servers[nodes[j]].s;
+    // var s' := b[i].servers[nodes[j]].s;
+    // assume forall k :: k in s.ccache ==> k in s'.ccache && (VCHappendsBefore(s.ccache[k].vc, s'.ccache[k].vc) || VCEq(s.ccache[k].vc, s'.ccache[k].vc));
+}
 
 
 lemma lemma_PropagationNotTail(

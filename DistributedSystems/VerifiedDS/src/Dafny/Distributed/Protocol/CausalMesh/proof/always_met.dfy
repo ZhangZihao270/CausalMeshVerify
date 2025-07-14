@@ -5,6 +5,7 @@ include "properties.dfy"
 // include "deps_are_met.dfy"
 // include "monotonic_read.dfy"
 include "../../../Common/Collections/Seqs.s.dfy"
+include "../../../Common/Collections/Sets.i.dfy"
 
 module CausalMesh_Proof_AllwaysMet_i {
 import opened CausalMesh_Cache_i
@@ -26,8 +27,9 @@ import opened CausalMesh_Proof_Properties_i
 import opened Collections__Seqs_s
 import opened Collections__Maps_i
 import opened Collections__Maps2_s
+import opened Collections__Sets_i
 
-lemma {:axiom} lemma_AVersionIsMetWillAlwaysMet(
+lemma lemma_AVersionIsMetWillAlwaysMet(
     i1:ICache,
     i2:ICache,
     c1:CCache,
@@ -46,11 +48,201 @@ lemma {:axiom} lemma_AVersionIsMetWillAlwaysMet(
     requires VectorClockValid(vc)
     requires AVersionOfAKeyIsMet(i1, c1, k, vc)
     ensures AVersionOfAKeyIsMet(i2, c2, k, vc)
+{
+    assert forall k :: k in i1 ==> k in i2 && forall m :: m in i1[k] ==> m in i2[k];
+    assert i1[k] <= i2[k];
+    assert forall k :: k in c1 ==> k in c2 && (VCHappendsBefore(c1[k].vc, c2[k].vc) || VCEq(c1[k].vc, c2[k].vc));
+    var m1 := FoldMetaSet2(c1[k], i1[k]);
+    var m1b := FoldMetaSet2(c2[k], i1[k]);
+    var m2 := FoldMetaSet2(c2[k], i2[k]);
+
+    lemma_FoldMetaSet2_AccMonotonicity(c1[k], c2[k], i1[k]);
+    lemma_FoldMetaSet2_MetasMonotonicity2(c2[k], i1[k], i2[k]);
+    assert VCEq(m1.vc, m1b.vc) || VCHappendsBefore(m1.vc, m1b.vc);
+    assert VCEq(m1b.vc, m2.vc) || VCHappendsBefore(m1b.vc, m2.vc);
+
+    assert VCEq(m1.vc, m2.vc) || VCHappendsBefore(m1.vc, m2.vc);
+}
+
+
+
+
+
+lemma lemma_FoldMetaSet2_MetasMonotonicity2(
+    acc: Meta,
+    metas1: set<Meta>,
+    metas2: set<Meta>
+)
+    requires MetaValid(acc)
+    requires forall m :: m in metas1 ==> MetaValid(m) && m.key == acc.key
+    requires forall m :: m in metas2 ==> MetaValid(m) && m.key == acc.key
+    requires metas1 <= metas2
+    ensures var r1 := FoldMetaSet2(acc, metas1);
+            var r2 := FoldMetaSet2(acc, metas2);
+            VCEq(r1.vc, r2.vc) || VCHappendsBefore(r1.vc, r2.vc)
+    decreases |metas2 - metas1|
+{
+    var r1 := FoldMetaSet2(acc, metas1);
+    var r2 := FoldMetaSet2(acc, metas2);
+    if metas2 == metas1 {
+        assert VCEq(r1.vc, r2.vc) || VCHappendsBefore(r1.vc, r2.vc);
+    } 
+    else if |metas2 - metas1| == 1 
+    {
+        var x :| x in metas2 - metas1;
+        var rr2 := FoldMetaSet2(acc, metas1 + {x});
+        lemma_AddSingletonRestoresSet(metas2, metas1, x);
+        assert metas1 + {x} == metas2;
+        assert r2 == rr2;
+        lemma_FoldMetaSet2_OneMoreMeta(acc, metas1, x);
+        assert VCEq(r1.vc, rr2.vc) || VCHappendsBefore(r1.vc, rr2.vc);
+        assert VCEq(r1.vc, r2.vc) || VCHappendsBefore(r1.vc, r2.vc);
+    }
+    else {
+        var x :| x in metas2 - metas1;
+        var rr2 := FoldMetaSet2(acc, metas1 + {x});
+        assert metas1 <= metas1 + {x};
+        assert forall m :: m in metas1 ==> MetaValid(m) && m.key == acc.key;
+        assert forall m :: m in metas1+{x} ==> MetaValid(m) && m.key == acc.key;
+        // assert |metas1 + {x}| > |metas1|;
+        // assert metas1+{x} <= metas2;
+        assert |metas1+{x} - metas1| < |metas2 - metas1|;
+        // assert |metas2 - metas1+{x}| < |metas2 - metas1|;
+
+        lemma_FoldMetaSet2_MetasMonotonicity2(acc, metas1, metas1+{x});
+        assert VCEq(r1.vc, rr2.vc) || VCHappendsBefore(r1.vc, rr2.vc);
+
+        assert rr2 == FoldMetaSet2(acc, metas1+{x});
+        assert r2 == FoldMetaSet2(acc, metas2);
+        lemma_FoldMetaSet2_MetasMonotonicity2(acc, metas1 + {x}, metas2);
+        assert VCEq(FoldMetaSet2(acc, metas1+{x}).vc, FoldMetaSet2(acc, metas2).vc) ||
+                VCHappendsBefore(FoldMetaSet2(acc, metas1+{x}).vc, FoldMetaSet2(acc, metas2).vc);
+        assert VCEq(rr2.vc, r2.vc) || VCHappendsBefore(rr2.vc, r2.vc);
+
+        assert VCEq(r1.vc, r2.vc) || VCHappendsBefore(r1.vc, r2.vc);
+    }
+}
+
+
+
+
+lemma lemma_FoldMetaSet2_OneMoreMeta(
+    acc:Meta,
+    metas:set<Meta>,
+    m:Meta
+)
+    requires MetaValid(acc)
+    requires forall m :: m in metas ==> MetaValid(m) && m.key == acc.key
+    requires MetaValid(m) && m.key == acc.key
+    ensures var r1 := FoldMetaSet2(acc, metas);
+            var r2 := FoldMetaSet2(acc, metas + {m});
+            VCEq(r1.vc, r2.vc) || VCHappendsBefore(r1.vc, r2.vc)
+{
+    var r1 := FoldMetaSet2(acc, metas);
+    var r2 := FoldMetaSet2(r1, {m});
+    lemma_FoldMetaSet2_Decompose(acc, metas, m);
+    assert r2 == FoldMetaSet2(acc, metas + {m});
+}
+
+
+lemma lemma_FoldMetaSet2_AccMonotonicity(
+    acc1: Meta,
+    acc2: Meta,
+    metas: set<Meta>
+)
+    requires MetaValid(acc1)
+    requires MetaValid(acc2)
+    requires acc1.key == acc2.key
+    requires forall m :: m in metas ==> MetaValid(m) && m.key == acc1.key
+    requires VCEq(acc1.vc, acc2.vc) || VCHappendsBefore(acc1.vc, acc2.vc)
+    ensures var r1 := FoldMetaSet2(acc1, metas);
+            var r2 := FoldMetaSet2(acc2, metas);
+            VCEq(r1.vc, r2.vc) || VCHappendsBefore(r1.vc, r2.vc)
+    decreases |metas|
+{
+    if |metas| == 0 {
+        // Base case: FoldMetaSet2(acc, {}) = acc
+        assert VCEq(acc1.vc, acc2.vc) || VCHappendsBefore(acc1.vc, acc2.vc);
+    } else {
+        var x :| x in metas;
+        // Induction
+        lemma_FoldMetaSet2_AccMonotonicity(
+            MetaMerge(acc1, x),
+            MetaMerge(acc2, x),
+            metas - {x}
+        );
+    }
+}
+
+
+// lemma lemma_FoldMetaSet2_AccMonotonicity(
+//     acc1: Meta,
+//     acc2: Meta,
+//     metas: set<Meta>
+// )
+//     requires MetaValid(acc1)
+//     requires MetaValid(acc2)
+//     requires acc1.key == acc2.key
+//     requires forall m :: m in metas ==> MetaValid(m) && m.key == acc1.key
+//     requires VCEq(acc1.vc, acc2.vc) || VCHappendsBefore(acc1.vc, acc2.vc)
+//     ensures var r1 := FoldMetaSet2(acc1, metas);
+//             var r2 := FoldMetaSet2(acc2, metas);
+//             VCEq(r1.vc, r2.vc) || VCHappendsBefore(r1.vc, r2.vc)
+//     decreases |metas|
 // {
-//     var m1 := FoldMetaSet2(c1[k], i1[k]);
-//     var m2 := FoldMetaSet2(c2[k], i2[k]);
-//     assume VCEq(m1.vc, m2.vc) || VCHappendsBefore(m1.vc, m2.vc);
+//     var r1 := FoldMetaSet2(acc1, metas);
+//     var r2 := FoldMetaSet2(acc2, metas);
+
+//     if |metas| == 0 {
+//         assert VCEq(acc1.vc, acc2.vc) || VCHappendsBefore(acc1.vc, acc2.vc);
+//         assert VCEq(r1.vc, r2.vc) || VCHappendsBefore(r1.vc, r2.vc);
+//     } 
+//     else {
+//         var x :| x in metas;
+//         // Induction
+//         lemma_FoldMetaSet2_AccMonotonicity(
+//             MetaMerge(acc1, x),
+//             MetaMerge(acc2, x),
+//             metas - {x}
+//         );
+//         // var rr1 := FoldMetaSet2(acc1, metas-{x});
+//         // var rr2 := FoldMetaSet2(acc2, metas-{x});
+//     }
 // }
+
+
+
+
+lemma lemma_DepsIsMetWillAlwaysMet(
+    b:Behavior<CMState>,
+    i:int,
+    idx:int,
+    deps:Dependency
+)
+    requires 1 < i
+    requires IsValidBehaviorPrefix(b, i)
+    requires CMNext(b[i-1], b[i])
+    requires 0 <= idx < Nodes
+    requires ServerNextDoesNotDecreaseVersions(b[i-1], b[i])
+    requires DependencyValid(deps)
+    requires DepsIsMet(b[i-1].servers[idx].s.icache, b[i-1].servers[idx].s.ccache, deps)
+    ensures DepsIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, deps)
+{
+    reveal_DepsIsMet();
+    forall k | k in deps 
+        ensures AVersionOfAKeyIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, k, deps[k])
+    {
+        assert AVersionOfAKeyIsMet(b[i-1].servers[idx].s.icache, b[i-1].servers[idx].s.ccache, k, deps[k]);
+        lemma_AVersionIsMetWillAlwaysMet(
+            b[i-1].servers[idx].s.icache,
+            b[i].servers[idx].s.icache,
+            b[i-1].servers[idx].s.ccache,
+            b[i].servers[idx].s.ccache,
+            k, deps[k]
+        );
+        assert AVersionOfAKeyIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, k, deps[k]);
+    }
+}
 
 lemma lemma_AVersionIsMetOnAllServersWillAlwaysMet(
     b:Behavior<CMState>,
@@ -120,47 +312,6 @@ lemma lemma_AllVersionsInDepsAreMetOnAllServersWillAlwaysMet(
         assert AVersionIsMetOnAllServers(b, i, k, deps[k]);
     }
 }
-
-// lemma {:axiom} lemma_AllDepsInICacheAreMetOnAllServersWillAlwaysMet(
-//     b:Behavior<CMState>,
-//     i:int,
-//     idx:int
-// )
-//     requires 1 < i
-//     requires IsValidBehaviorPrefix(b, i)
-//     requires CMNext(b[i-1], b[i])
-//     // requires CMNext(b[i-2], b[i-1])
-//     requires 0 <= idx < Nodes
-//     requires ServerNextDoesNotDecreaseVersions(b[i-1], b[i])
-//     requires AllDepsInICacheAreMetOnAllServers(b, i-1, b[i].servers[idx].s.icache)
-//     ensures AllDepsInICacheAreMetOnAllServers(b, i, b[i].servers[idx].s.icache)
-// {
-//     assert forall j :: 0 <= j < |b[i-1].servers| ==> 
-//         CCacheDoesNotDecrease(b[i-1].servers[j].s.ccache, b[i].servers[j].s.ccache) 
-//         && ICacheDoesNotDecrease(b[i-1].servers[j].s.icache, b[i].servers[j].s.icache);
-    
-//     var icache := b[i].servers[idx].s.icache;
-//     assert ICacheValid(icache);
-//     assert AllDepsInICacheAreMetOnAllServers(b, i-1, icache);
-
-//     forall k | k in icache
-//     {
-//         forall m:Meta | m in icache[k] 
-//         {
-//             forall kk | kk in m.deps 
-//                 ensures AVersionIsMetOnAllServers(b, i, kk, m.deps[kk])
-//             {
-//                 assert AVersionIsMetOnAllServers(b, i-1, kk, m.deps[kk]);
-//                 lemma_AVersionIsMetOnAllServersWillAlwaysMet(b, i, kk, m.deps[kk]);
-//                 assert AVersionIsMetOnAllServers(b, i, kk, m.deps[kk]);
-//             }
-//         }
-//     }
-
-//     assert forall k :: k in icache ==>
-//             forall m:Meta :: m in icache[k] ==> 
-//                 forall kk :: kk in m.deps ==> AVersionIsMetOnAllServers(b, i, kk, m.deps[kk]);
-// }
 
 lemma lemma_AllVersionsInCCacheAreMetOnAllServersWillAlwaysMet(
     b:Behavior<CMState>,

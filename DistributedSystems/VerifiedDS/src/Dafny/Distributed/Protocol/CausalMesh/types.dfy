@@ -271,6 +271,39 @@ module CausalMesh_Types_i {
         lemma_FoldMetaBounded(MetaMerge(acc, x), metas - {x}, bound, domain);
     }
 
+    lemma {:axiom} lemma_FoldMetaSet2_Decompose(
+        acc: Meta,
+        metas: set<Meta>,
+        m: Meta
+    )
+        requires MetaValid(acc)
+        requires MetaValid(m)
+        requires forall mm :: mm in metas ==> MetaValid(mm) && mm.key == acc.key
+        requires m.key == acc.key
+        ensures FoldMetaSet2(acc, metas + {m}) == FoldMetaSet2(FoldMetaSet2(acc, metas), {m})
+    // {
+    //     if |metas| == 0 {
+    //         // Base case: metas == {}
+    //         assert FoldMetaSet2(acc, metas + {m}) == FoldMetaSet2(acc, {m});
+    //     } else {
+    //         // Pick an element
+    //         var x :| x in metas;
+    //         // Inductive hypothesis: for (metas - {x})
+    //         lemma_FoldMetaSet2_Decompose(MetaMerge(acc, x), metas - {x}, m);
+
+    //         // Now show that
+    //         // FoldMetaSet2(acc, metas + {m})
+    //         // == FoldMetaSet2(MetaMerge(acc, x), (metas - {x}) + {m})
+
+    //         // Because metas + {m} = (metas - {x}) + {x} + {m} = (metas - {x}) + {m} + {x}
+    //         // But since set union is commutative, just expanding definition suffices:
+
+    //         // unfold FoldMetaSet2(acc, metas + {m})
+    //         assert FoldMetaSet2(acc, metas + {m}) ==
+    //                FoldMetaSet2(MetaMerge(acc, x), (metas - {x}) + {m});
+    //     }
+    // }
+
 
     function FoldVC(acc: VectorClock, vcs: set<VectorClock>) : (res:VectorClock)
         requires VectorClockValid(acc)

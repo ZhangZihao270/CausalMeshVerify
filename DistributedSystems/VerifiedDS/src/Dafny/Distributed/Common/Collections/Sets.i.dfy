@@ -282,4 +282,9 @@ function intsetmax(s:set<int>):int
     if x > y then x else y
 }
 
+lemma {:axiom} lemma_AddSingletonRestoresSet<T>(A: set<T>, B: set<T>, x: T)
+    requires B <= A
+    requires x in A - B
+    requires |A - B| == 1
+    ensures B + {x} == A
 } 
