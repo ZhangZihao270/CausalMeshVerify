@@ -172,6 +172,25 @@ module CausalMesh_Properties_i {
         //         c2[k]
     }
 
+    lemma lemma_MergeCCacheSmallerThanPVC(vc:VectorClock, c1:CCache, c2:CCache)
+        requires CCacheValid(c1)
+        requires CCacheValid(c2)
+        requires VectorClockValid(vc)
+        requires forall k :: k in c1 ==> VCHappendsBefore(c1[k].vc, vc) || VCEq(c1[k].vc, vc)
+        requires forall k :: k in c2 ==> VCHappendsBefore(c2[k].vc, vc) || VCEq(c2[k].vc, vc)
+        ensures CCacheValid(MergeCCache(c1,c2))
+        ensures var res := MergeCCache(c1,c2);
+                forall k :: k in res ==> VCHappendsBefore(res[k].vc, vc) || VCEq(res[k].vc, vc)
+    {
+        // map k | k in c1.Keys + c2.Keys ::
+        //     if k in c1 && k in c2 then
+        //         MetaMerge(c1[k], c2[k])
+        //     else if k in c1 then
+        //         c1[k]
+        //     else
+        //         c2[k]
+    }
+
     lemma lemma_MergeCCacheEnsuresReadDepsAreMet(icache:ICache, c1:CCache, todos:map<Key, Meta>)
         requires CCacheValid(c1)
         requires CCacheValid(todos)

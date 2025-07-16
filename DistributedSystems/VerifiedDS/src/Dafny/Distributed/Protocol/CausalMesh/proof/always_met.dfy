@@ -124,7 +124,19 @@ lemma lemma_FoldMetaSet2_MetasMonotonicity2(
 }
 
 
+// lemma lemma_MeteMergeDoesNotDecreaseVC(
+//     m1:Meta,
+//     m2:Meta
+// )
+//     requires MetaValid(m1)
+//     requires MetaValid(m2)
+//     requires m1.key == m2.key
+//     ensures var r := MetaMerge(m1, m2);
+//             (VCHappendsBefore(m1.vc, r.vc) || VCEq(m1.vc, r.vc))
+//             && (VCHappendsBefore(m2.vc, r.vc) || VCEq(m2.vc, r.vc))
+// {
 
+// }
 
 lemma lemma_FoldMetaSet2_OneMoreMeta(
     acc:Meta,
@@ -137,11 +149,30 @@ lemma lemma_FoldMetaSet2_OneMoreMeta(
     ensures var r1 := FoldMetaSet2(acc, metas);
             var r2 := FoldMetaSet2(acc, metas + {m});
             VCEq(r1.vc, r2.vc) || VCHappendsBefore(r1.vc, r2.vc)
+    decreases |metas|
 {
     var r1 := FoldMetaSet2(acc, metas);
     var r2 := FoldMetaSet2(r1, {m});
     lemma_FoldMetaSet2_Decompose(acc, metas, m);
     assert r2 == FoldMetaSet2(acc, metas + {m});
+    // if |metas| == 0 {
+    //     var r1 := FoldMetaSet2(acc, metas);
+    //     assert r1 == acc;
+
+    //     assert metas + {m} == {m};
+    //     var r2 := FoldMetaSet2(acc, metas + {m});
+    //     assume r2 == MetaMerge(acc, m);
+    //     assert VCEq(r1.vc, r2.vc) || VCHappendsBefore(r1.vc, r2.vc);
+    // } else {
+    //     var x :| x in metas;
+    //     var metas' := metas - {x};
+    //     var acc' := MetaMerge(acc, x);
+
+    //     lemma_FoldMetaSet2_OneMoreMeta(acc', metas', m);
+    //     var rec_r1 := FoldMetaSet2(acc', metas');
+    //     var rec_r2 := if m in metas' then rec_r1 else FoldMetaSet2(acc', metas' + {m});
+    //     assert VCEq(rec_r1.vc, rec_r2.vc) || VCHappendsBefore(rec_r1.vc, rec_r2.vc);
+    // }
 }
 
 

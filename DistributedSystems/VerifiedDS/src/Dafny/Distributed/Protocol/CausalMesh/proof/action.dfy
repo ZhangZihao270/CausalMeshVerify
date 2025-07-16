@@ -34,11 +34,22 @@ import opened Collections__Maps_i
     ensures  ios == b[i].environment.nextStep.ios
     ensures  CMNext(b[i], b[i+1])
     ensures  CMNextServer(b[i], b[i+1], idx, ios)
+    ensures |ios| > 0 && ios[0].LIoOpReceive? ==> ios[0].r.dst == idx
   {
     lemma_AssumptionsMakeValidTransition(b, i);
     // lemma_ConstantsAllConsistent(b, i);
     assert CMNext(b[i], b[i+1]);
     ios :| CMNextServer(b[i], b[i+1], idx, ios);
+    var ps := b[i];
+    var ps' := b[i+1];
+    assert LEnvironment_Next(ps.environment, ps'.environment);
+    assert IsValidLEnvStep(ps.environment, ps.environment.nextStep);
+    assert ps.environment.nextStep.actor == idx;
+    assert IsValidLIoOp(ios[0], ps.environment.nextStep.actor, ps.environment);
+    if |ios| > 0 && ios[0].LIoOpReceive?
+    {
+      assert ios[0].r.dst == idx;
+    }
   }
 
   lemma lemma_ActionThatChangesClientIsThatClientsAction(

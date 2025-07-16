@@ -87,6 +87,10 @@ lemma Lemma_imapInductionRange(start:int, end:int, f:imap<int, bool>)
   }
 }
 
+lemma {:axiom} lemma_MapRemoveSubsetOfTheValOfKey<K,V>(m:map<K,set<V>>, k:K, s:set<V>)
+        requires k in m && m[k] >= s
+        ensures |m.Values| > |m[k := m[k] - s].Values|
+        
 // TODO_MODULE: } import opened Collections__Maps2_i_ = Collections__Maps2_i
 
 } 

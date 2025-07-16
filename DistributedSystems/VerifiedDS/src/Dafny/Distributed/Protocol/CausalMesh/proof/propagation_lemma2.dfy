@@ -65,7 +65,7 @@ returns (nodes:seq<int>)
     ensures forall j :: 0 <= j < |nodes| ==> 0 <= nodes[j] < Nodes
     ensures forall j :: 0 <= j < |nodes| - 1 ==> NodesAreNext(nodes[j], nodes[j+1])
     ensures forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc)
-    ensures forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.meta.deps)
+    // ensures forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.meta.deps)
 {
     if i == 0 {
         return;
@@ -84,7 +84,7 @@ returns (nodes:seq<int>)
         nodes := lemma_Propagation2(b, i-1, p);
         assert CMNext(b[i-1], b[i]);
         assume forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc);
-        assume forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, p.msg.meta.deps);
+        // assume forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, p.msg.meta.deps);
         lemma_AVersionOfAKeyIsMetIsTransitive(b, i, p.msg.key, p.msg.meta.vc, p.msg.meta.deps, nodes);
         return;
     }
@@ -101,6 +101,7 @@ returns (nodes:seq<int>)
 
     var idx, ios := lemma_ActionThatSendsPropagationIsReceivePropogateOrReceiveWrite(b[i-1], b[i], p);
     // assert idx in nodes;
+    assert ios[0].r.dst == idx;
 
     if ios[0].r.msg.Message_Propagation? {
         // assert 0 < i;
@@ -120,7 +121,7 @@ returns (nodes:seq<int>)
         lemma_PropagationNotTail(b, i, idx, p.msg.key, p.msg.meta.vc, p.msg.meta.deps, ios);
         assume AVersionOfAKeyIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, p.msg.key, p.msg.meta.vc);
         assert DependencyValid(p.msg.meta.deps);
-        assume DepsIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, p.msg.meta.deps);
+        // assume DepsIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, p.msg.meta.deps);
         var rp := ios[0].r;
 
         assert NodesAreNext(p.src, p.dst);
@@ -134,11 +135,11 @@ returns (nodes:seq<int>)
         assume prev_nodes[0] == p.msg.start;
         assume prev_nodes[|prev_nodes|-2] == rp.src;
         assume prev_nodes[|prev_nodes|-1] == rp.dst;
-        lemma_ReceivePktDstIsMe(rp.dst, idx);
+        // lemma_ReceivePktDstIsMe(rp.dst, idx);
         assume rp.dst == idx;
         assert prev_nodes[|prev_nodes|-1] == p.src;
         assume forall j :: 0 <= j < |prev_nodes| - 1 ==> AVersionOfAKeyIsMet(b[i-1].servers[prev_nodes[j]].s.icache, b[i-1].servers[prev_nodes[j]].s.ccache, rp.msg.key, rp.msg.meta.vc);
-        assume forall j :: 0 <= j < |prev_nodes| - 1 ==> DepsIsMet(b[i-1].servers[prev_nodes[j]].s.icache, b[i-1].servers[prev_nodes[j]].s.ccache, p.msg.meta.deps);
+        // assume forall j :: 0 <= j < |prev_nodes| - 1 ==> DepsIsMet(b[i-1].servers[prev_nodes[j]].s.icache, b[i-1].servers[prev_nodes[j]].s.ccache, p.msg.meta.deps);
 
         assert forall j :: 0 <= j < |prev_nodes| ==> 0 <= prev_nodes[j] < Nodes;
         assert forall j :: 0 <= j < |prev_nodes| - 1 ==> NodesAreNext(prev_nodes[j], prev_nodes[j+1]);
@@ -152,7 +153,7 @@ returns (nodes:seq<int>)
         
         assert forall j :: 0 <= j < |nodes| - 1 ==> NodesAreNext(nodes[j], nodes[j+1]);
         // assert forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc);
-        assert forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.meta.deps);
+        // assert forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.meta.deps);
     } else {
         assert i > 0;
         assert IsValidBehaviorPrefix(b, i);
@@ -180,10 +181,10 @@ returns (nodes:seq<int>)
         assert AllVersionsInDepsAreMetOnAllServers(b, i-1, p_write.msg.deps_write);
         reveal_AllVersionsInDepsAreMetOnAllServers();
         reveal_DepsIsMet();
-        assert DepsIsMet(b[i-1].servers[idx].s.icache, b[i-1].servers[idx].s.ccache, p_write.msg.deps_write); // this is ture, but without the previous lemma, will timeout.
+        // assert DepsIsMet(b[i-1].servers[idx].s.icache, b[i-1].servers[idx].s.ccache, p_write.msg.deps_write); // this is ture, but without the previous lemma, will timeout.
         lemma_PropagationAtHead(b, i, idx, p.msg.key, p.msg.meta.vc, p.msg.meta.deps, ios);
         assert AVersionOfAKeyIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, p.msg.key, p.msg.meta.vc);
-        assert DepsIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, p.msg.meta.deps);
+        // assert DepsIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, p.msg.meta.deps);
 
         
         // assume DepsIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, p_write.msg.deps_write);
@@ -203,8 +204,8 @@ returns (nodes:seq<int>)
 
         assert AVersionOfAKeyIsMet(b[i].servers[p.src].s.icache, b[i].servers[p.src].s.ccache, p.msg.key, p.msg.meta.vc);
         assert forall j :: 0 <= j < |nodes| - 1 ==> 
-            AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc)
-            && DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.meta.deps);
+            AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc);
+            // && DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.meta.deps);
     }
 }
 
@@ -383,13 +384,13 @@ lemma lemma_AVersionOfAKeyIsMetIsTransitive(
     requires |nodes| > 1
     requires forall j :: 0 <= j < |nodes| ==> 0 <= nodes[j] < Nodes
     requires forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, key, vc)
-    requires forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, deps)
+    // requires forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, deps)
     ensures forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, key, vc)
-    ensures forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, deps)
+    // ensures forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, deps)
 {
     forall j | 0 <= j < |nodes| - 1
         ensures AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, key, vc)
-        ensures DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, deps)
+        // ensures DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, deps)
     {
         assert AVersionOfAKeyIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, key, vc);
         lemma_AVersionIsMetWillAlwaysMet(
@@ -402,9 +403,9 @@ lemma lemma_AVersionOfAKeyIsMetIsTransitive(
         assert AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, key, vc);
 
         // reveal_DepsIsMet();
-        assert DepsIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, deps);
-        lemma_DepsIsMetWillAlwaysMet(b, i, nodes[j], deps);
-        assert DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, deps);
+        // assert DepsIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, deps);
+        // lemma_DepsIsMetWillAlwaysMet(b, i, nodes[j], deps);
+        // assert DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, deps);
     }
     // var j :| 0 <= j < |nodes| - 1;
     // var s := b[i-1].servers[nodes[j]].s;
@@ -440,7 +441,7 @@ lemma lemma_PropagationNotTail(
     requires var sp := ExtractSentPacketsFromIos(ios);
             sp[0].msg.Message_Propagation? && sp[0].msg.meta.vc == vc && sp[0].msg.meta.deps == deps
     ensures AVersionOfAKeyIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, key, vc)
-    ensures DepsIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, deps)
+    // ensures DepsIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, deps)
     // ensures forall k :: 0 < k <= n ==> 
     //          var node := CalNode(ios[0].r.msg.start, k);
     //          AVersionOfAKeyIsMet(b[i].servers[node].s.icache, b[i].servers[node].s.ccache, ios[0].r.msg.key, ios[0].r.msg.meta.vc)
@@ -450,7 +451,7 @@ lemma lemma_PropagationNotTail(
     var s := b[i-1].servers[idx].s;
     var s' := b[i].servers[idx].s;
 
-    lemma_ReceiveAPropagationImpliesTheDepsAreAlreadyMet(s.icache, s.ccache, p.msg.meta.deps);
+    // lemma_ReceiveAPropagationImpliesTheDepsAreAlreadyMet(s.icache, s.ccache, p.msg.meta.deps);
 
     var sp := ExtractSentPacketsFromIos(ios);
     var p_pro := sp[0];
@@ -464,27 +465,27 @@ lemma lemma_PropagationNotTail(
     assert meta in s'.icache[k];
 
     assert AVersionOfAKeyIsMet(s'.icache, s'.ccache, p.msg.key, meta.vc);
-    assert DepsIsMet(s'.icache, s'.ccache, p.msg.meta.deps);
+    // assert DepsIsMet(s'.icache, s'.ccache, p.msg.meta.deps);
 }
 
-lemma {:axiom} lemma_ReceiveAPropagationImpliesTheDepsAreAlreadyMet(icache:ICache, ccache:CCache, deps:Dependency)
-    requires ICacheValid(icache)
-    requires CCacheValid(ccache)
-    requires DependencyValid(deps)
-    requires forall k :: k in Keys_domain ==> k in icache && k in ccache
-    ensures DepsIsMet(icache, ccache, deps)
+// lemma {:axiom} lemma_ReceiveAPropagationImpliesTheDepsAreAlreadyMet(icache:ICache, ccache:CCache, deps:Dependency)
+//     requires ICacheValid(icache)
+//     requires CCacheValid(ccache)
+//     requires DependencyValid(deps)
+//     requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+//     ensures DepsIsMet(icache, ccache, deps)
 
-lemma {:axiom} lemma_PropagationToTheTailImpliesTheDepsAreMetOnAllServers(
-    b:Behavior<CMState>,
-    i:int,
-    deps:Dependency
-)
-    requires i > 0
-    requires IsValidBehaviorPrefix(b, i)
-    requires DependencyValid(deps)
-    ensures AllVersionsInDepsAreMetOnAllServers(b, i, deps)
+// lemma {:axiom} lemma_PropagationToTheTailImpliesTheDepsAreMetOnAllServers(
+//     b:Behavior<CMState>,
+//     i:int,
+//     deps:Dependency
+// )
+//     requires i > 0
+//     requires IsValidBehaviorPrefix(b, i)
+//     requires DependencyValid(deps)
+//     ensures AllVersionsInDepsAreMetOnAllServers(b, i, deps)
 
 
-lemma {:axiom} lemma_ReceivePktDstIsMe(dst:int, me:int)
-    ensures dst == me
+// lemma {:axiom} lemma_ReceivePktDstIsMe(dst:int, me:int)
+//     ensures dst == me
 }

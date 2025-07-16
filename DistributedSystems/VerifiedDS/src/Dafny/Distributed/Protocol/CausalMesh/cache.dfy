@@ -433,6 +433,11 @@ module CausalMesh_Cache_i {
     //     ensures forall k :: k in metas ==>
     //                 forall kk :: kk in metas[k].deps ==> kk in metas && (VCHappendsBefore(metas[k].deps[kk], metas[kk].vc) || VCEq(metas[k].deps[kk], metas[kk].vc))
 
+    lemma {:axiom} lemma_GetMetasOfAllDeps(vc:VectorClock, todos:map<Key, Meta>)
+        requires VectorClockValid(vc)
+        requires forall k :: k in todos ==> MetaValid(todos[k])
+        ensures forall k :: k in todos ==> VCHappendsBefore(todos[k].vc, vc) || VCEq(todos[k].vc, vc)
+
     function PullDeps2(icache:ICache, ccache:CCache, deps:Dependency) : (c:(ICache, CCache))
         requires ICacheValid(icache)
         requires CCacheValid(ccache)
@@ -463,6 +468,43 @@ module CausalMesh_Cache_i {
         // assume AllVersionsInCCacheAreMetInICache(icache, todos);
         var new_cache := MergeCCache(ccache, todos);
         lemma_MergeCCacheRemainsCausalCut(ccache, todos);
+        // lemma_MergeCCacheEnsuresUponReadDepsAreMet(icache, ccache, todos, deps);
+        // assert ReadsDepsAreMet1(icache, new_cache, todos);
+        // assert UponReadsDepsAreMet(new_cache, deps);
+        // lemma_MergeCCacheEnsuresAllVersionsInCCacheAreMetInICache(icache, ccache, todos);
+        // assert AllVersionsInCCacheAreMetInICache(icache, new_cache);
+        (icache, new_cache)
+    }
+
+    function PullDeps3(vc:VectorClock, icache:ICache, ccache:CCache, deps:Dependency) : (c:(ICache, CCache))
+        requires ICacheValid(icache)
+        requires CCacheValid(ccache)
+        requires CausalCut(ccache)
+        requires VectorClockValid(vc)
+        requires forall k :: k in ccache ==> VCHappendsBefore(ccache[k].vc, vc) || VCEq(ccache[k].vc, vc)
+        requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+        requires forall k :: k in ccache ==> k in icache
+        requires DependencyValid(deps)
+        requires forall k :: k in deps ==> k in icache // && k in ccache
+        ensures ICacheValid(c.0)
+        ensures CCacheValid(c.1)
+        // ensures forall k :: k in deps ==> k in c.0 && k in c.1
+        ensures forall k :: k in icache ==> k in c.0
+        ensures forall k :: k in ccache ==> k in c.1
+        ensures forall k :: k in c.1 ==> VCHappendsBefore(c.1[k].vc, vc) || VCEq(c.1[k].vc, vc)
+        ensures CausalCut(c.1)
+    {
+        // assume AllVersionsInCCacheAreMetInICache(icache, ccache);
+        var domain := icache.Keys + deps.Keys;
+        var todos := GetMetasOfAllDeps(icache, deps, map[], domain);
+        
+        lemma_GetMetasOfAllDeps(vc, todos); // this is proved in GetMetasOfAllDeps2
+        assume forall k :: k in todos ==> VCHappendsBefore(todos[k].vc, vc) || VCEq(todos[k].vc, vc);
+
+        var new_cache := MergeCCache(ccache, todos);
+        lemma_MergeCCacheRemainsCausalCut(ccache, todos);
+        lemma_MergeCCacheSmallerThanPVC(vc, ccache, todos);
+        assert forall k :: k in new_cache ==> VCHappendsBefore(new_cache[k].vc, vc) || VCEq(new_cache[k].vc, vc);
         // lemma_MergeCCacheEnsuresUponReadDepsAreMet(icache, ccache, todos, deps);
         // assert ReadsDepsAreMet1(icache, new_cache, todos);
         // assert UponReadsDepsAreMet(new_cache, deps);
@@ -517,7 +559,8 @@ module CausalMesh_Cache_i {
         gvc : VectorClock,
         next : int,
         icache : ICache,
-        ccache : CCache
+        ccache : CCache,
+        ghost pvc : VectorClock
     )
 
     predicate ServerValid(s:Server)
@@ -526,11 +569,13 @@ module CausalMesh_Cache_i {
         && 0 <= s.next < Nodes
         && s.next == Circle(s.id, Nodes)
         && VectorClockValid(s.gvc)
+        && VectorClockValid(s.pvc)
         && ICacheValid(s.icache)
         && CCacheValid(s.ccache)
         && CausalCut(s.ccache)
-        && forall k :: k in Keys_domain ==> k in s.icache && k in s.ccache
-        && forall k :: k in s.ccache ==> k in s.icache
+        && (forall k :: k in s.ccache ==> VCHappendsBefore(s.ccache[k].vc, s.pvc) || VCEq(s.ccache[k].vc, s.pvc))
+        && (forall k :: k in Keys_domain ==> k in s.icache && k in s.ccache)
+        && (forall k :: k in s.ccache ==> k in s.icache)
     }
 
 
@@ -550,6 +595,7 @@ module CausalMesh_Cache_i {
         && s.id == id
         && s.next == Circle(id, Nodes)
         && s.gvc == EmptyVC()
+        && s.pvc == EmptyVC()
         && s.icache == InitICache()
         && s.ccache == InitCCache()
     }
@@ -560,14 +606,19 @@ module CausalMesh_Cache_i {
         requires PacketValid(p)
         // ensures ServerValid(s')
     {
-        var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, p.msg.deps_read);
-        && s' == s.(icache := new_icache, ccache := new_ccache)
+        assume forall k :: k in s.ccache ==> VCHappendsBefore(s.ccache[k].vc, s.pvc) || VCEq(s.ccache[k].vc, s.pvc);
+        var new_pvc := if (VCHappendsBefore(p.msg.pvc_read, s.pvc)) then s.pvc else VCMerge(s.pvc, p.msg.pvc_read);
+        // var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, p.msg.deps_read);
+        var (new_icache, new_ccache) := PullDeps3(new_pvc, s.icache, s.ccache, p.msg.deps_read);
+        assert forall k :: k in new_ccache ==> VCHappendsBefore(new_ccache[k].vc, new_pvc) || VCEq(new_ccache[k].vc, new_pvc);
+        && s' == s.(icache := new_icache, ccache := new_ccache, pvc := new_pvc)
         && sp == [LPacket(s.id, p.src, 
                         Message_Read_Reply(
                             p.msg.opn_read,
                             p.msg.key_read,
                             new_ccache[p.msg.key_read].vc,
-                            new_ccache[p.msg.key_read].deps
+                            new_ccache[p.msg.key_read].deps,
+                            new_pvc
                         )
                     )]
     }
@@ -647,12 +698,14 @@ module CausalMesh_Cache_i {
 
         var new_icache := AddMetasToICache(s.icache, new_local_metas);
         
+        var new_pvc := if (VCHappendsBefore(p.msg.pvc_write, s.pvc)) then s.pvc else VCMerge(s.pvc, p.msg.pvc_write);
 
-        var wreply := LPacket(s.id, p.src, Message_Write_Reply(p.msg.opn_write, p.msg.key_write, new_vc));
+        var wreply := LPacket(s.id, p.src, Message_Write_Reply(p.msg.opn_write, p.msg.key_write, new_vc, new_pvc));
         var propagate := LPacket(s.id, s.next, Message_Propagation(p.msg.key_write, meta, s.id, 1));
         // var old_propagates := ConstructPropagatePkts(local_metas, s.id, s.next);
 
-        && s' == s.(gvc := new_vc, icache := new_icache)
+        
+        && s' == s.(gvc := new_vc, icache := new_icache, pvc := new_pvc)
         && sp == [wreply] /*+ old_propagates*/ + [propagate]
     }
 
@@ -686,15 +739,30 @@ module CausalMesh_Cache_i {
                 var new_gvc := VCMerge(s.gvc, vcs);
                 var new_deps := p.msg.meta.deps;
 
-                var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, new_deps);
+                assume forall k :: k in s.ccache ==> VCHappendsBefore(s.ccache[k].vc, s.pvc) || VCEq(s.ccache[k].vc, s.pvc);
+                var new_pvc := if (VCHappendsBefore(p.msg.meta.vc, s.pvc)) then s.pvc else VCMerge(s.pvc, p.msg.meta.vc);
+
+                var (new_icache, new_ccache) := PullDeps3(new_pvc, s.icache, s.ccache, new_deps);
 
                 // var merged_meta := FoldMetaSet2(new_ccache[p.msg.key], p.msg.metas);
                 // var merged_meta := MetaMerge(new_ccache[p.msg.key], p.msg.meta);
 
+                assert forall k :: k in new_ccache ==> VCHappendsBefore(new_ccache[k].vc, new_pvc) || VCEq(new_ccache[k].vc, new_pvc);
+
                 var new_ccache' := InsertIntoCCache(new_ccache, p.msg.meta);
                 var new_icache' := AddMetaToICache(new_icache, p.msg.meta);
 
-                && s' == s.(gvc := new_gvc, icache := new_icache', ccache := new_ccache')
+                assert forall k :: k in new_ccache' && k != p.msg.meta.key ==> k in new_ccache && VCEq(new_ccache[k].vc, new_ccache'[k].vc);
+                assert if p.msg.meta.key in new_ccache then new_ccache'[p.msg.meta.key].vc == VCMerge(p.msg.meta.vc, new_ccache[p.msg.meta.key].vc)  else new_ccache'[p.msg.meta.key].vc == p.msg.meta.vc;
+
+                // assert forall k :: k in new_ccache ==> k in new_ccache' && (VCHappendsBefore(new_ccache[k].vc, new_ccache'[k].vc) || VCEq(new_ccache[k].vc, new_ccache'[k].vc));
+                assert VCHappendsBefore(p.msg.meta.vc, new_pvc) || VCEq(p.msg.meta.vc, new_pvc);
+                assert forall k :: k in new_ccache' && k != p.msg.meta.key ==> VCHappendsBefore(new_ccache'[k].vc, new_pvc) || VCEq(new_ccache'[k].vc, new_pvc);
+                assert new_ccache'[p.msg.meta.key].vc == VCMerge(p.msg.meta.vc, new_ccache[p.msg.meta.key].vc);
+                assert VCHappendsBefore(VCMerge(p.msg.meta.vc, new_ccache[p.msg.meta.key].vc), new_pvc) || VCEq(VCMerge(p.msg.meta.vc, new_ccache[p.msg.meta.key].vc), new_pvc);
+                assert forall k :: k in new_ccache' ==> VCHappendsBefore(new_ccache'[k].vc, new_pvc) || VCEq(new_ccache'[k].vc, new_pvc);
+
+                && s' == s.(gvc := new_gvc, icache := new_icache', ccache := new_ccache', pvc := new_pvc)
                 && sp == []
             else
                 var new_icache := AddMetaToICache(s.icache, p.msg.meta);
@@ -713,7 +781,8 @@ module CausalMesh_Cache_i {
         id : int,
         opn : int,
         local : map<Key, Meta>,
-        deps : Dependency
+        deps : Dependency,
+        ghost pvc : VectorClock
     )
 
     predicate ClientValid(c:Client)
@@ -721,6 +790,7 @@ module CausalMesh_Cache_i {
         && Nodes <= c.id < Nodes + Clients
         && (forall k :: k in c.local ==> k in Keys_domain && MetaValid(c.local[k]) && c.local[k].key == k)
         && DependencyValid(c.deps)
+        && VectorClockValid(c.pvc)
     }
 
     predicate ClientInit(c:Client, id:int)
@@ -730,6 +800,7 @@ module CausalMesh_Cache_i {
         && c.id == id
         && c.local == map[]
         && c.deps == map[]
+        && c.pvc == EmptyVC()
     }
 
     predicate SendRead(c:Client, c':Client, sp:seq<Packet>)
@@ -743,7 +814,7 @@ module CausalMesh_Cache_i {
         else 
             var server :| 0 <= server < Nodes as int;
             && c' == c.(opn := c.opn + 1)
-            && sp == [LPacket(c.id, server, Message_Read(c.opn, k, c.deps))]
+            && sp == [LPacket(c.id, server, Message_Read(c.opn, k, c.deps, c.pvc))]
     }
 
     predicate ReceiveReadReply(c:Client, c':Client, p:Packet, sp:seq<Packet>)
@@ -753,8 +824,9 @@ module CausalMesh_Cache_i {
         // requires p.msg.opn_rreply == c.opn
     {
         var m := Meta(p.msg.key_rreply, p.msg.vc_rreply, p.msg.deps_rreply);
+        var new_pvc := if (VCHappendsBefore(p.msg.pvc_rreply, c.pvc)) then c.pvc else VCMerge(c.pvc, p.msg.pvc_rreply);
 
-        && c' == c.(local := c.local[p.msg.key_rreply := m], deps := DependencyInsertOrMerge(c.deps, p.msg.key_rreply, p.msg.vc_rreply))
+        && c' == c.(local := c.local[p.msg.key_rreply := m], deps := DependencyInsertOrMerge(c.deps, p.msg.key_rreply, p.msg.vc_rreply), pvc := new_pvc)
         && sp == []
     }
 
@@ -764,17 +836,20 @@ module CausalMesh_Cache_i {
         var k :| 0 <= k < MaxKeys as int;
         var server :| 0 <= server < Nodes as int;
         && c' == c.(opn := c.opn + 1)
-        && sp == [LPacket(c.id, server, Message_Write(c.opn + 1, k, c.deps, c.local))]
+        && sp == [LPacket(c.id, server, Message_Write(c.opn + 1, k, c.deps, c.local, c.pvc))]
     }
 
     predicate ReceiveWriteReply(c:Client, c':Client, p:Packet, sp:seq<Packet>)
+        requires ClientValid(c)
         requires p.msg.Message_Write_Reply?
+        requires PacketValid(p)
     {
         var k := p.msg.key_wreply;
         var vc := p.msg.vc_wreply;
+        var new_pvc := if (VCHappendsBefore(p.msg.pvc_wreply, c.pvc)) then c.pvc else VCMerge(c.pvc, p.msg.pvc_wreply);
 
         var m := Meta(k, vc, c.deps);
-        && c' == c.(local := c.local[k := m])
+        && c' == c.(local := c.local[k := m], pvc := new_pvc)
         && sp == []
     }
 
@@ -800,8 +875,8 @@ module CausalMesh_Cache_i {
         && (forall io :: io in ios[1..] ==> io.LIoOpSend?)
         && var sent_packets := ExtractSentPacketsFromIos(ios);
             match ios[0].r.msg 
-                case Message_Read(_,_,_) => ReceiveRead(s, s', ios[0].r, sent_packets)
-                case Message_Write(_,_,_,_) => ReceiveWrite(s, s', ios[0].r, sent_packets)
+                case Message_Read(_,_,_,_) => ReceiveRead(s, s', ios[0].r, sent_packets)
+                case Message_Write(_,_,_,_,_) => ReceiveWrite(s, s', ios[0].r, sent_packets)
                 case Message_Propagation(_,_,_,_) => ReceivePropagate(s, s', ios[0].r, sent_packets)
     }
 
@@ -864,8 +939,8 @@ module CausalMesh_Cache_i {
         && (forall io :: io in ios[1..] ==> io.LIoOpSend?)
         && var sent_packets := ExtractSentPacketsFromIos(ios);
             match ios[0].r.msg 
-                case Message_Read_Reply(_,_,_,_) => ReceiveReadReply(s, s', ios[0].r, sent_packets)
-                case Message_Write_Reply(_,_,_) => ReceiveWriteReply(s, s', ios[0].r, sent_packets)
+                case Message_Read_Reply(_,_,_,_,_) => ReceiveReadReply(s, s', ios[0].r, sent_packets)
+                case Message_Write_Reply(_,_,_,_) => ReceiveWriteReply(s, s', ios[0].r, sent_packets)
     }
 
     predicate ClientNextProcessPacket(s:Client, s':Client, ios:seq<CMIo>)

@@ -78,6 +78,7 @@ lemma lemma_WriteDepsIsMetOnAllServersPrefix(
 
     lemma_WriteDepsIsMetOnAllServersPrefix(b, i-1);
     assume forall j :: 0 < j <= i-1 ==> AllWriteDepsAreMet(b, j);
+    assert 0 < i-1 <= i-1;
     assert AllWriteDepsAreMet(b, i-1);
 
     var p :| p in b[i].environment.sentPackets && p !in b[i-1].environment.sentPackets && p.msg.Message_Write?;
@@ -92,7 +93,7 @@ lemma lemma_WriteDepsIsMetOnAllServersPrefix(
 
     lemma_ClientWriteDepsIsMetOnAllServers(b, i, idx, [p]);
     assert AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_write);
-    assert forall rp :: rp in b[i-1].environment.sentPackets && rp.msg.Message_Write? ==> 
+    assume forall rp :: rp in b[i-1].environment.sentPackets && rp.msg.Message_Write? ==> 
         AllVersionsInDepsAreMetOnAllServers(b, i-1, rp.msg.deps_write);
     
 

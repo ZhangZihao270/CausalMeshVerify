@@ -2,22 +2,24 @@ include "../../Common/Collections/Maps.i.dfy"
 include "types.dfy"
 include "message.dfy"
 include "properties.dfy"
+include "../../Common/Collections/Maps2.i.dfy"
 
 module CausalMesh_PullDeps_i {
     import opened Collections__Maps_i
     import opened CausalMesh_Types_i
     import opened CausalMesh_Message_i
     import opened CausalMesh_Properties_i
+    import opened Collections__Maps2_i
 
     function AddMetaToMetaMap(todos:map<Key, Meta>, m:Meta) : (res:map<Key, Meta>)
         requires forall k :: k in todos ==> MetaValid(todos[k]) && todos[k].key == k 
-                    && forall kk :: kk in todos[k].deps ==> 
-                        VCHappendsBefore(todos[k].deps[kk], todos[k].vc) || VCEq(todos[k].deps[kk], todos[k].vc)
+                    // && forall kk :: kk in todos[k].deps ==> 
+                    //     VCHappendsBefore(todos[k].deps[kk], todos[k].vc) || VCEq(todos[k].deps[kk], todos[k].vc)
         requires MetaValid(m)
         ensures m.key in res
         ensures forall k :: k in res ==> MetaValid(res[k]) && res[k].key == k 
-        ensures forall k :: k in res ==> forall kk :: kk in res[k].deps ==> 
-                        VCHappendsBefore(res[k].deps[kk], res[k].vc) || VCEq(res[k].deps[kk], res[k].vc)
+        // ensures forall k :: k in res ==> forall kk :: kk in res[k].deps ==> 
+        //                 VCHappendsBefore(res[k].deps[kk], res[k].vc) || VCEq(res[k].deps[kk], res[k].vc)
     {
         if m.key in todos then
             todos[m.key := MetaMerge(todos[m.key], m)]
@@ -27,8 +29,8 @@ module CausalMesh_PullDeps_i {
 
     lemma lemma_AddMetaToMetaMap(todos:map<Key, Meta>, m:Meta)
         requires forall k :: k in todos ==> MetaValid(todos[k]) && todos[k].key == k 
-                    && forall kk :: kk in todos[k].deps ==> 
-                        VCHappendsBefore(todos[k].deps[kk], todos[k].vc) || VCEq(todos[k].deps[kk], todos[k].vc)
+                    // && forall kk :: kk in todos[k].deps ==> 
+                    //     VCHappendsBefore(todos[k].deps[kk], todos[k].vc) || VCEq(todos[k].deps[kk], todos[k].vc)
         requires CausalCut(todos)
         requires MetaValid(m)
         requires forall k :: k in m.deps ==> k in todos && (VCHappendsBefore(m.deps[k], todos[k].vc) || VCEq(m.deps[k], todos[k].vc))
@@ -38,13 +40,190 @@ module CausalMesh_PullDeps_i {
 
     }
 
+    lemma lemma_AddMetaToMetaMap2(vc:VectorClock, todos:map<Key, Meta>, m:Meta)
+        requires VectorClockValid(vc)
+        requires forall k :: k in todos ==> MetaValid(todos[k]) && todos[k].key == k && (VCHappendsBefore(todos[k].vc, vc) || VCEq(todos[k].vc, vc))
+        requires MetaValid(m)
+        requires (VCHappendsBefore(m.vc, vc) || VCEq(m.vc, vc))
+        ensures var res := AddMetaToMetaMap(todos, m);
+                forall k :: k in res ==> (VCHappendsBefore(res[k].vc, vc) || VCEq(res[k].vc, vc))
+    {
+
+    }
+
+    function {:opaque} GetMetasOfAllDeps2(vc:VectorClock, icache:ICache, deps:Dependency, todos:map<Key, Meta>, domain:set<Key>) : (res:map<Key, Meta>)
+        requires forall k :: k in icache ==> k in Keys_domain && (forall m :: m in icache[k] ==> MetaValid(m) && m.key == k
+                    && (forall kk :: kk in m.deps ==> kk in domain && kk in Keys_domain))
+        requires DependencyValid(deps)
+        requires VectorClockValid(vc)
+        requires forall k :: k in todos ==> MetaValid(todos[k]) && todos[k].key == k && (VCHappendsBefore(todos[k].vc, vc) || VCEq(todos[k].vc, vc))
+        // requires forall k :: k in todos ==> forall kk :: kk in todos[k].deps ==> 
+        //                 VCHappendsBefore(todos[k].deps[kk], todos[k].vc) || VCEq(todos[k].deps[kk], todos[k].vc)
+        // requires CausalCut(todos)
+        requires forall k :: k in Keys_domain ==> k in icache // should we have this?
+        requires forall k :: k in deps ==> k in domain && (VCHappendsBefore(deps[k], vc) || VCEq(deps[k], vc))
+
+        // ensures forall k :: k in res ==> MetaValid(res[k])
+        // ensures forall k :: k in todos ==> k in res && (VCHappendsBefore(todos[k].vc, res[k].vc) || VCEq(todos[k].vc, res[k].vc))
+        // ensures forall k :: k in deps ==> k in res && (VCHappendsBefore(deps[k], res[k].vc) || VCEq(deps[k], res[k].vc))
+        ensures forall k :: k in res ==> MetaValid(res[k]) && res[k].key == k 
+                        // && forall kk :: kk in res[k].deps ==> 
+                        //     VCHappendsBefore(res[k].deps[kk], res[k].vc) || VCEq(res[k].deps[kk], res[k].vc)
+        ensures forall k :: k in res ==> (VCHappendsBefore(res[k].vc, vc) || VCEq(res[k].vc, vc))
+        // ensures CausalCut(res)
+        decreases |icache.Values|, |deps|
+    {
+        if |deps| == 0 then 
+            todos
+        else 
+            var k :| k in deps;
+            var new_deps := RemoveElt(deps, k);
+            if k in todos && (VCHappendsBefore(deps[k], todos[k].vc) || VCEq(deps[k], todos[k].vc)) then 
+                var res := GetMetasOfAllDeps2(vc, icache, new_deps, todos, domain);
+                res
+            else 
+                var metas := set m | m in icache[k] && (VCHappendsBefore(m.vc, deps[k]) || VCEq(m.vc, deps[k]));
+                // if exists m :: m in icache[k] && VCEq(m.vc, deps[k]) then 
+                if |metas| > 0 then
+                    var initial := EmptyMeta(k);
+                    assert forall m :: m in metas ==> forall kk :: kk in m.deps ==> kk in domain;
+                    var merged := FoldMetaSet(initial, metas, domain);
+                    assert MetaValid(merged);
+                    var meta := merged.(vc := deps[k]);
+                    
+                    lemma_FoldMetaBounded(initial, metas, deps[k], domain);
+                    assert (VCHappendsBefore(merged.vc, meta.vc) || VCEq(merged.vc, meta.vc));
+                    assert MetaValid(meta);
+
+                    var new_cache := icache[k:= icache[k] - metas];
+                    assert icache[k] >= metas;
+                    lemma_MapRemoveSubsetOfTheValOfKey(icache, k, metas);
+                    assert |new_cache.Values| < |icache.Values|;
+
+                    assert forall m :: m in metas ==> VCHappendsBefore(m.vc, meta.vc) || VCEq(m.vc, meta.vc);
+                    assert VCHappendsBefore(meta.vc, vc) || VCEq(meta.vc, vc);
+
+                    var res := GetMetasOfAllDeps2(vc, new_cache, merged.deps, todos, domain);
+
+                    assume forall k :: k in res ==> MetaValid(res[k]) && (VCHappendsBefore(res[k].vc, vc) || VCEq(res[k].vc, vc));
+                    assert MetaValid(meta);
+                    var todos' := AddMetaToMetaMap(res, meta);
+                    // assert forall kk :: kk in merged.deps ==> kk in res && (VCHappendsBefore(merged.deps[kk], res[kk].vc) || VCEq(merged.deps[kk], res[kk].vc));
+                    // assert merged.deps == meta.deps;
+                    // lemma_AddMetaToMetaMap(res, meta);
+
+                    lemma_AddMetaToMetaMap2(vc, res, meta);
+                    
+                    // assert forall k :: k in todos' ==>
+                    //         forall kk :: kk in todos'[k].deps ==>
+                    //             kk in todos' && (VCHappendsBefore(todos'[k].deps[kk], todos'[kk].vc) || VCEq(todos'[k].deps[kk], todos'[kk].vc));
+                    // assert CausalCut(todos');
+
+                    var res' := GetMetasOfAllDeps2(vc, icache, new_deps, todos', domain);
+                    res'
+                else 
+                    var initial := EmptyMeta(k);
+                    var meta := initial.(vc:=deps[k]);
+                    // assert CausalCut(todos);
+                   
+                    var todos' := AddMetaToMetaMap(todos, meta);
+
+                    lemma_AddMetaToMetaMap2(vc, todos, meta);
+                    
+                    var res := GetMetasOfAllDeps2(vc, icache, new_deps, todos', domain);
+                    res
+    }
+
+
+    // function {:opaque} GetMetasOfAllDeps2(vc:VectorClock, icache:ICache, deps:Dependency, todos:map<Key, Meta>, domain:set<Key>) : (res:map<Key, Meta>)
+    //     requires forall k :: k in icache ==> k in Keys_domain && (forall m :: m in icache[k] ==> MetaValid(m) && m.key == k
+    //                 && (forall kk :: kk in m.deps ==> kk in domain && kk in Keys_domain))
+    //     requires DependencyValid(deps)
+    //     requires VectorClockValid(vc)
+    //     requires forall k :: k in todos ==> MetaValid(todos[k]) && todos[k].key == k && (VCHappendsBefore(todos[k].vc, vc) || VCEq(todos[k].vc, vc))
+    //     requires forall k :: k in todos ==> forall kk :: kk in todos[k].deps ==> 
+    //                     VCHappendsBefore(todos[k].deps[kk], todos[k].vc) || VCEq(todos[k].deps[kk], todos[k].vc)
+    //     requires CausalCut(todos)
+    //     requires forall k :: k in Keys_domain ==> k in icache // should we have this?
+    //     requires forall k :: k in deps ==> k in domain && (VCHappendsBefore(deps[k], vc) || VCEq(deps[k], vc))
+
+    //     ensures forall k :: k in res ==> MetaValid(res[k])
+    //     ensures forall k :: k in todos ==> k in res && (VCHappendsBefore(todos[k].vc, res[k].vc) || VCEq(todos[k].vc, res[k].vc))
+    //     ensures forall k :: k in deps ==> k in res && (VCHappendsBefore(deps[k], res[k].vc) || VCEq(deps[k], res[k].vc))
+    //     ensures forall k :: k in res ==> MetaValid(res[k]) && res[k].key == k 
+    //                     && forall kk :: kk in res[k].deps ==> 
+    //                         VCHappendsBefore(res[k].deps[kk], res[k].vc) || VCEq(res[k].deps[kk], res[k].vc)
+    //     ensures forall k :: k in res ==> (VCHappendsBefore(res[k].vc, vc) || VCEq(res[k].vc, vc))
+    //     ensures CausalCut(res)
+    //     decreases |icache.Values|, |deps|
+    // {
+    //     if |deps| == 0 then 
+    //         todos
+    //     else 
+    //         var k :| k in deps;
+    //         var new_deps := RemoveElt(deps, k);
+    //         if k in todos && (VCHappendsBefore(deps[k], todos[k].vc) || VCEq(deps[k], todos[k].vc)) then 
+    //             var res := GetMetasOfAllDeps2(vc, icache, new_deps, todos, domain);
+    //             res
+    //         else 
+    //             var metas := set m | m in icache[k] && (VCHappendsBefore(m.vc, deps[k]) || VCEq(m.vc, deps[k]));
+    //             if |metas| > 0 then
+    //                 var initial := EmptyMeta(k);
+    //                 assert forall m :: m in metas ==> forall kk :: kk in m.deps ==> kk in domain;
+    //                 var merged := FoldMetaSet(initial, metas, domain);
+    //                 assert MetaValid(merged);
+    //                 var meta := merged.(vc := deps[k]);
+                    
+    //                 lemma_FoldMetaBounded(initial, metas, deps[k], domain);
+    //                 assert (VCHappendsBefore(merged.vc, meta.vc) || VCEq(merged.vc, meta.vc));
+    //                 assert MetaValid(meta);
+
+    //                 var new_cache := icache[k:= icache[k] - metas];
+    //                 assert icache[k] >= metas;
+    //                 lemma_MapRemoveSubsetOfTheValOfKey(icache, k, metas);
+    //                 assert |new_cache.Values| < |icache.Values|;
+
+    //                 assert forall m :: m in metas ==> VCHappendsBefore(m.vc, meta.vc) || VCEq(m.vc, meta.vc);
+    //                 assert VCHappendsBefore(meta.vc, vc) || VCEq(meta.vc, vc);
+
+    //                 var res := GetMetasOfAllDeps2(vc, new_cache, merged.deps, todos, domain);
+
+    //                 assume forall k :: k in res ==> MetaValid(res[k]) && (VCHappendsBefore(res[k].vc, vc) || VCEq(res[k].vc, vc));
+    //                 assert MetaValid(meta);
+    //                 var todos' := AddMetaToMetaMap(res, meta);
+    //                 assert forall kk :: kk in merged.deps ==> kk in res && (VCHappendsBefore(merged.deps[kk], res[kk].vc) || VCEq(merged.deps[kk], res[kk].vc));
+    //                 assert merged.deps == meta.deps;
+    //                 lemma_AddMetaToMetaMap(res, meta);
+
+    //                 lemma_AddMetaToMetaMap2(vc, res, meta);
+                    
+    //                 assert forall k :: k in todos' ==>
+    //                         forall kk :: kk in todos'[k].deps ==>
+    //                             kk in todos' && (VCHappendsBefore(todos'[k].deps[kk], todos'[kk].vc) || VCEq(todos'[k].deps[kk], todos'[kk].vc));
+    //                 assert CausalCut(todos');
+
+    //                 var res' := GetMetasOfAllDeps2(vc, icache, new_deps, todos', domain);
+    //                 res'
+    //             else 
+    //                 var initial := EmptyMeta(k);
+    //                 var meta := initial.(vc:=deps[k]);
+    //                 assert CausalCut(todos);
+                   
+    //                 var todos' := AddMetaToMetaMap(todos, meta);
+
+    //                 lemma_AddMetaToMetaMap2(vc, todos, meta);
+                    
+    //                 var res := GetMetasOfAllDeps2(vc, icache, new_deps, todos', domain);
+    //                 res
+    // }
+
     function GetMetasOfAllDeps(icache:ICache, deps:Dependency, todos:map<Key, Meta>, domain:set<Key>) : (res:map<Key, Meta>)
         requires forall k :: k in icache ==> k in Keys_domain && (forall m :: m in icache[k] ==> MetaValid(m) && m.key == k
                     && (forall kk :: kk in m.deps ==> kk in domain && kk in Keys_domain))
         requires DependencyValid(deps)
         requires forall k :: k in todos ==> MetaValid(todos[k]) && todos[k].key == k 
-        requires forall k :: k in todos ==> forall kk :: kk in todos[k].deps ==> 
-                        VCHappendsBefore(todos[k].deps[kk], todos[k].vc) || VCEq(todos[k].deps[kk], todos[k].vc)
+        // requires forall k :: k in todos ==> forall kk :: kk in todos[k].deps ==> 
+        //                 VCHappendsBefore(todos[k].deps[kk], todos[k].vc) || VCEq(todos[k].deps[kk], todos[k].vc)
         requires CausalCut(todos)
         requires forall k :: k in Keys_domain ==> k in icache // should we have this?
         requires forall k :: k in deps ==> k in domain 
@@ -53,8 +232,8 @@ module CausalMesh_PullDeps_i {
         ensures forall k :: k in todos ==> k in res && (VCHappendsBefore(todos[k].vc, res[k].vc) || VCEq(todos[k].vc, res[k].vc))
         ensures forall k :: k in deps ==> k in res && (VCHappendsBefore(deps[k], res[k].vc) || VCEq(deps[k], res[k].vc))
         ensures forall k :: k in res ==> MetaValid(res[k]) && res[k].key == k 
-                        && forall kk :: kk in res[k].deps ==> 
-                            VCHappendsBefore(res[k].deps[kk], res[k].vc) || VCEq(res[k].deps[kk], res[k].vc)
+                        // && forall kk :: kk in res[k].deps ==> 
+                        //     VCHappendsBefore(res[k].deps[kk], res[k].vc) || VCEq(res[k].deps[kk], res[k].vc)
         ensures CausalCut(res)
         decreases |icache.Values|, |deps|
     {

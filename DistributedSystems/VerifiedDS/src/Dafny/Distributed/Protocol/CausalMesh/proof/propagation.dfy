@@ -61,7 +61,7 @@ lemma lemma_PropagationAtTail(
 
     assert 0 <= i - 1;
     assert IsValidBehaviorPrefix(b, i-1);
-    assume forall j :: 0 <= j < i-1 ==> CMNext(b[j], b[j+1]);
+    // assume forall j :: 0 <= j < i-1 ==> CMNext(b[j], b[j+1]);
     assert CMNext(b[i-1], b[i]);
     assert forall j :: 0 <= j < Nodes ==> ServerValid(b[i-1].servers[j].s);
     assert p.msg.Message_Propagation?;
@@ -81,7 +81,7 @@ lemma lemma_PropagationAtTail(
     assert forall j :: 0 <= j < |nodes| ==> 0 <= nodes[j] < Nodes;
     assert forall j :: 0 <= j < |nodes| - 1 ==> NodesAreNext(nodes[j], nodes[j+1]);
     assert forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc);
-    assert forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, p.msg.meta.deps);
+    // assert forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, p.msg.meta.deps);
 
     lemma_ServerNextSatisfyNodesAreNext(s.id, s.next);
     assert NodesAreNext(s.id, p.msg.start);

@@ -84,6 +84,155 @@ lemma lemma_AllServersAreMetPrefix(
     assert forall j :: 0 < j <= i ==> AllServersAreMet(b, j);
 }
 
+lemma lemma_VCRelationIsTransitiveForDeps(
+    deps:Dependency,
+    vc1:VectorClock,
+    vc2:VectorClock
+)
+    requires DependencyValid(deps)
+    requires VectorClockValid(vc1)
+    requires VectorClockValid(vc2)
+    requires forall k :: k in deps ==> VCHappendsBefore(deps[k], vc1) || VCEq(deps[k], vc1)
+    requires VCHappendsBefore(vc1, vc2) || VCEq(vc1, vc2)
+    ensures forall k :: k in deps ==> VCHappendsBefore(deps[k], vc2) || VCEq(deps[k], vc2)
+{
+
+}
+
+lemma lemma_ServersAreMetForCMNext_WithStateChange(b:Behavior<CMState>, i:int, idx:int)
+    requires IsValidBehaviorPrefix(b, i+1)
+    requires 0 < i
+    requires 0 <= idx < |b[i].servers|
+    requires 0 <= idx < |b[i+1].servers|
+    requires b[i].servers[idx] != b[i+1].servers[idx]
+    requires CMNext(b[i], b[i+1])
+    requires AllServersAreMet(b, i)
+    requires forall j :: 0 < j <= i+1 ==> AllWriteDepsAreMet(b, j)
+    requires forall j :: 0 < j <= i+1 ==> AllReadDepsAreMet(b, j)
+    requires forall j :: 0 <= j < i+1 ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
+    // requires AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache)
+    // requires AllVersionsInDepsAreMetOnAllServers(b, i-1, p.msg.deps_read)
+    requires AllReadDepsAreMet(b, i)
+    // requires ServerNextDoesNotDecreaseVersions(b[i], b[i+1])
+    ensures AllServersAreMet(b, i+1)
+{
+    var s := b[i].servers[idx].s;
+    var s' := b[i+1].servers[idx].s;
+
+    var ios := lemma_ActionThatChangesServerIsThatServersAction(b, i, idx);
+    assert CMNextServer(b[i], b[i+1], idx, ios);
+    assert LServerNext(b[i].servers[idx], b[i+1].servers[idx], ios);
+    assert ServerValid(s);
+    assert |ios| > 0 && ios[0].LIoOpReceive? ==> ios[0].r.dst == idx;
+
+    assert ios[0].LIoOpReceive?;
+    var p := ios[0].r;
+    var sp := ExtractSentPacketsFromIos(ios);
+    assert p.msg.Message_Read? || p.msg.Message_Write? || p.msg.Message_Propagation?;
+    assert p in b[i].environment.sentPackets;
+    assert p.dst == idx;
+
+    // lemma_BehaviorValidImpliesOneStepValid(b, i-1);
+
+    assert ServerProcessPacket(s, s', ios);
+    if p.msg.Message_Read? {
+        assert ReceiveRead(s, s', p, sp);
+        var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, p.msg.deps_read);
+        assert AllReadDepsAreMet(b, i);
+        assert forall pp :: pp in b[i].environment.sentPackets && pp.msg.Message_Read? ==> 
+            AllVersionsInDepsAreMetOnAllServers(b, i, pp.msg.deps_read);
+        assert AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_read);
+
+        // lemma_ServerReceiveReadOnlySentOnePacket(p);
+        lemma_VersionsAfterPullDepsAreMetOnAllServers2(b, i, idx, p.msg.pvc_read, p.msg.deps_read);
+        
+        assert AllVersionsInCCacheAreMetOnAllServers(b, i, new_ccache);
+
+        lemma_CCacheIsMetOnAllServersWillAlwaysMet(b, i+1, new_ccache);
+
+        assert s'.icache == new_icache;
+        assert s'.ccache == new_ccache;
+        assert AllVersionsInCCacheAreMetOnAllServers(b, i+1, b[i+1].servers[idx].s.ccache);
+    } 
+    else if p.msg.Message_Write?
+    {
+        assert ReceiveWrite(s, s', p, sp);
+        // assert s'.icache == s.icache;
+        assert s'.ccache == s.ccache;
+        lemma_CCacheIsMetOnAllServersWillAlwaysMet(b, i+1, s.ccache);
+        assert AllVersionsInCCacheAreMetOnAllServers(b, i+1, b[i+1].servers[idx].s.ccache);
+    }
+    else
+    {
+        assert p.msg.Message_Propagation?;
+        assert ReceivePropagate(s, s', p, sp);
+        if s.next == p.msg.start && p.msg.round == 2 {
+            var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, p.msg.meta.deps);
+            assert forall k :: k in p.msg.meta.deps ==> VCHappendsBefore(p.msg.meta.deps[k], p.msg.meta.vc) || VCEq(p.msg.meta.deps[k], p.msg.meta.vc);
+            var new_pvc := if (VCHappendsBefore(p.msg.meta.vc, s.pvc)) then s.pvc else VCMerge(s.pvc, p.msg.meta.vc);
+            assert VCHappendsBefore(p.msg.meta.vc, new_pvc) || VCEq(p.msg.meta.vc, new_pvc);
+            lemma_VCRelationIsTransitiveForDeps(p.msg.meta.deps, p.msg.meta.vc, new_pvc);
+            assert forall k :: k in p.msg.meta.deps ==> VCHappendsBefore(p.msg.meta.deps[k], new_pvc) || VCEq(p.msg.meta.deps[k], new_pvc);
+
+            assert i > 0;
+            assert IsValidBehaviorPrefix(b, i+1);
+            assert CMNext(b[i], b[i+1]);
+            assert forall j :: 0 < j <= i+1 ==> AllWriteDepsAreMet(b, j);
+            assert 0 <= idx < Nodes;
+            assert |ios| > 0;
+            assert ios[0].LIoOpReceive?;
+            assert p.msg.Message_Propagation?;
+            assert p in b[i].environment.sentPackets;
+            // lemma_ReceivePktDstIsMe(p.dst, idx);
+            assert p.dst == idx;
+            reveal_ServerIdsAreMatch();
+            // lemma_ServerIDsAreMatch(b[i]);
+            assert idx == b[i].servers[idx].s.id;
+            assert ios[0].r == p;
+            assert PacketValid(p);
+            assert p.msg.start == b[i].servers[idx].s.next;
+            assert p.msg.round == 2;
+            assert ReceivePropagate(b[i].servers[idx].s, b[i+1].servers[idx].s, p, ExtractSentPacketsFromIos(ios));
+
+            lemma_PropagationAtTail(b, i+1, idx, p, ios);
+            // lemma_PropagationAtTail2(b, i+1, idx, p, ios);
+            lemma_AVersionIsPropagatedImpliesAllPreviousDepsAreMet(b, i+1, new_pvc, p.msg.meta.deps);
+
+            assert AVersionIsMetOnAllServers(b, i+1, p.msg.key, p.msg.meta.vc);
+            // // lemma_MetaIsMetImpliesItsDepsAreMet(b, i+1, p.msg.meta);
+            assert AllVersionsInDepsAreMetOnAllServers(b, i+1, p.msg.meta.deps);
+
+            // lemma_PropagationToTheTailImpliesTheDepsAreMetOnAllServers(b, i, p.msg.meta.deps);
+            lemma_AVersionIsPropagatedImpliesAllPreviousDepsAreMet(b, i, new_pvc, p.msg.meta.deps);
+            assert AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.meta.deps);
+            lemma_VersionsAfterPullDepsAreMetOnAllServers2(b, i, idx, new_pvc, p.msg.meta.deps);
+        
+            assert AllVersionsInCCacheAreMetOnAllServers(b, i, new_ccache);
+
+            lemma_CCacheIsMetOnAllServersWillAlwaysMet(b, i+1, new_ccache);
+            // lemma_AllVersionsInDepsAreMetOnAllServersWillAlwaysMet(b, i+1, p.msg.meta.deps);
+            // lemma_BehaviorValidImpliesOneStepValid(b, i);
+            // lemma_AVersionIsMetOnAllServersWillAlwaysMet(b, i+1, p.msg.key, p.msg.meta.vc);
+            // assert AllVersionsInDepsAreMetOnAllServers(b, i+1, p.msg.meta.deps);
+            // assert AVersionIsMetOnAllServers(b, i+1, p.msg.key, p.msg.meta.vc);
+            assert AllVersionsInCCacheAreMetOnAllServers(b, i+1, new_ccache);
+            lemma_InsertIntoCCachePreserveAllVersionsInCCacheAreMetOnAllServers(b, i+1, new_ccache, p.msg.meta);
+            assert AllVersionsInCCacheAreMetOnAllServers(b, i+1, b[i+1].servers[idx].s.ccache);
+        } else {
+            assert s'.ccache == s.ccache;
+            lemma_CCacheIsMetOnAllServersWillAlwaysMet(b, i+1, s.ccache);
+            assert AllVersionsInCCacheAreMetOnAllServers(b, i+1, b[i+1].servers[idx].s.ccache);
+        }
+    }
+
+    assert AllVersionsInCCacheAreMetOnAllServers(b, i+1, b[i+1].servers[idx].s.ccache);
+    assert forall j :: 0 <= j < |b[i].servers| && j != idx ==> 
+            b[i].servers[j].s.ccache == b[i+1].servers[j].s.ccache; //&& b[i].servers[j].s.icache == b[i+1].servers[j].s.icache;
+
+    lemma_ServersAreMetForCMNext_helper(b, i, idx);
+    assert AllServersAreMet(b, i+1);
+}
+
 
 lemma lemma_AllServersAreMetForIndexOne(
     b:Behavior<CMState>,
@@ -134,6 +283,7 @@ lemma lemma_ServersAreMetForCMNext(b:Behavior<CMState>, i:int)
     requires CMNext(b[i], b[i+1])
     requires AllServersAreMet(b, i)
     requires forall j :: 0 < j <= i+1 ==> AllWriteDepsAreMet(b, j)
+    requires forall j :: 0 < j <= i+1 ==> AllReadDepsAreMet(b, j)
     requires forall j :: 0 <= j < i+1 ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
     requires AllReadDepsAreMet(b, i)
     // requires ServerNextDoesNotDecreaseVersions(b[i], b[i+1])
@@ -160,127 +310,13 @@ lemma lemma_ServersAreMetForCMNext(b:Behavior<CMState>, i:int)
     }
 }
 
-lemma lemma_ServersAreMetForCMNext_WithStateChange(b:Behavior<CMState>, i:int, idx:int)
-    requires IsValidBehaviorPrefix(b, i+1)
-    requires 0 < i
-    requires 0 <= idx < |b[i].servers|
-    requires 0 <= idx < |b[i+1].servers|
-    requires b[i].servers[idx] != b[i+1].servers[idx]
-    requires CMNext(b[i], b[i+1])
-    requires AllServersAreMet(b, i)
-    requires forall j :: 0 < j <= i+1 ==> AllWriteDepsAreMet(b, j)
-    requires forall j :: 0 <= j < i+1 ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
-    // requires AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache)
-    // requires AllVersionsInDepsAreMetOnAllServers(b, i-1, p.msg.deps_read)
-    requires AllReadDepsAreMet(b, i)
-    // requires ServerNextDoesNotDecreaseVersions(b[i], b[i+1])
-    ensures AllServersAreMet(b, i+1)
-{
-    var s := b[i].servers[idx].s;
-    var s' := b[i+1].servers[idx].s;
+// lemma {:axiom} lemma_ServerReceiveReadOnlySentOnePacket(
+//     p:Packet
+// )
+// requires PacketValid(p)
+// requires p.msg.Message_Read?
+// ensures AllReadDepsSmallerThanPVCRead(p.msg.pvc_read, p.msg.deps_read)
 
-    var ios := lemma_ActionThatChangesServerIsThatServersAction(b, i, idx);
-    assert CMNextServer(b[i], b[i+1], idx, ios);
-    assert LServerNext(b[i].servers[idx], b[i+1].servers[idx], ios);
-    assert ServerValid(s);
-
-    assert ios[0].LIoOpReceive?;
-    var p := ios[0].r;
-    var sp := ExtractSentPacketsFromIos(ios);
-    assert p.msg.Message_Read? || p.msg.Message_Write? || p.msg.Message_Propagation?;
-    assert p in b[i].environment.sentPackets;
-
-    // lemma_BehaviorValidImpliesOneStepValid(b, i-1);
-
-    assert ServerProcessPacket(s, s', ios);
-    if p.msg.Message_Read? {
-        assert ReceiveRead(s, s', p, sp);
-        var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, p.msg.deps_read);
-        assert AllReadDepsAreMet(b, i);
-        assert forall pp :: pp in b[i].environment.sentPackets && pp.msg.Message_Read? ==> 
-            AllVersionsInDepsAreMetOnAllServers(b, i, pp.msg.deps_read);
-        assert AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_read);
-        lemma_VersionsAfterPullDepsAreMetOnAllServers(b, i, idx, p.msg.deps_read);
-        
-        assert AllVersionsInCCacheAreMetOnAllServers(b, i, new_ccache);
-
-        lemma_CCacheIsMetOnAllServersWillAlwaysMet(b, i+1, new_ccache);
-
-        assert s'.icache == new_icache;
-        assert s'.ccache == new_ccache;
-        assert AllVersionsInCCacheAreMetOnAllServers(b, i+1, b[i+1].servers[idx].s.ccache);
-    } 
-    else if p.msg.Message_Write?
-    {
-        assert ReceiveWrite(s, s', p, sp);
-        // assert s'.icache == s.icache;
-        assert s'.ccache == s.ccache;
-        lemma_CCacheIsMetOnAllServersWillAlwaysMet(b, i+1, s.ccache);
-        assert AllVersionsInCCacheAreMetOnAllServers(b, i+1, b[i+1].servers[idx].s.ccache);
-    }
-    else
-    {
-        assert p.msg.Message_Propagation?;
-        assert ReceivePropagate(s, s', p, sp);
-        if s.next == p.msg.start && p.msg.round == 2 {
-            var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, p.msg.meta.deps);
-
-            assert i > 0;
-            assert IsValidBehaviorPrefix(b, i+1);
-            assert CMNext(b[i], b[i+1]);
-            assert forall j :: 0 < j <= i+1 ==> AllWriteDepsAreMet(b, j);
-            assert 0 <= idx < Nodes;
-            assert |ios| > 0;
-            assert ios[0].LIoOpReceive?;
-            assert p.msg.Message_Propagation?;
-            assert p in b[i].environment.sentPackets;
-            lemma_ReceivePktDstIsMe(p.dst, idx);
-            assert p.dst == idx;
-            reveal_ServerIdsAreMatch();
-            // lemma_ServerIDsAreMatch(b[i]);
-            assert idx == b[i].servers[idx].s.id;
-            assert ios[0].r == p;
-            assert PacketValid(p);
-            assert p.msg.start == b[i].servers[idx].s.next;
-            assert p.msg.round == 2;
-            assert ReceivePropagate(b[i].servers[idx].s, b[i+1].servers[idx].s, p, ExtractSentPacketsFromIos(ios));
-
-            lemma_PropagationAtTail(b, i+1, idx, p, ios);
-            lemma_PropagationAtTail2(b, i+1, idx, p, ios);
-
-            assert AVersionIsMetOnAllServers(b, i+1, p.msg.key, p.msg.meta.vc);
-            // lemma_MetaIsMetImpliesItsDepsAreMet(b, i+1, p.msg.meta);
-            assert AllVersionsInDepsAreMetOnAllServers(b, i+1, p.msg.meta.deps);
-
-            lemma_PropagationToTheTailImpliesTheDepsAreMetOnAllServers(b, i, p.msg.meta.deps);
-            assert AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.meta.deps);
-            lemma_VersionsAfterPullDepsAreMetOnAllServers(b, i, idx, p.msg.meta.deps);
-        
-            assert AllVersionsInCCacheAreMetOnAllServers(b, i, new_ccache);
-
-            lemma_CCacheIsMetOnAllServersWillAlwaysMet(b, i+1, new_ccache);
-            // lemma_AllVersionsInDepsAreMetOnAllServersWillAlwaysMet(b, i+1, p.msg.meta.deps);
-            // lemma_BehaviorValidImpliesOneStepValid(b, i);
-            // lemma_AVersionIsMetOnAllServersWillAlwaysMet(b, i+1, p.msg.key, p.msg.meta.vc);
-            // assert AllVersionsInDepsAreMetOnAllServers(b, i+1, p.msg.meta.deps);
-            // assert AVersionIsMetOnAllServers(b, i+1, p.msg.key, p.msg.meta.vc);
-            assert AllVersionsInCCacheAreMetOnAllServers(b, i+1, new_ccache);
-            lemma_InsertIntoCCachePreserveAllVersionsInCCacheAreMetOnAllServers(b, i+1, new_ccache, p.msg.meta);
-            assert AllVersionsInCCacheAreMetOnAllServers(b, i+1, b[i+1].servers[idx].s.ccache);
-        } else {
-            assert s'.ccache == s.ccache;
-            lemma_CCacheIsMetOnAllServersWillAlwaysMet(b, i+1, s.ccache);
-            assert AllVersionsInCCacheAreMetOnAllServers(b, i+1, b[i+1].servers[idx].s.ccache);
-        }
-    }
-
-    assert AllVersionsInCCacheAreMetOnAllServers(b, i+1, b[i+1].servers[idx].s.ccache);
-    assert forall j :: 0 <= j < |b[i].servers| && j != idx ==> 
-            b[i].servers[j].s.ccache == b[i+1].servers[j].s.ccache; //&& b[i].servers[j].s.icache == b[i+1].servers[j].s.icache;
-
-    lemma_ServersAreMetForCMNext_helper(b, i, idx);
-    assert AllServersAreMet(b, i+1);
-}
 
 
 lemma lemma_ServersAreMetForCMNext_helper(

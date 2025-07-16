@@ -26,103 +26,104 @@ import opened Collections__Seqs_s
 import opened Collections__Maps_i
 import opened Collections__Maps2_s
 
-lemma lemma_PropagationAtTail2(
-    b:Behavior<CMState>,
-    i:int,
-    idx:int,
-    p:Packet,
-    ios:seq<CMIo>
-)
-    requires 0 < i 
-    requires IsValidBehaviorPrefix(b, i)
-    // requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
-    requires CMNext(b[i-1], b[i])
-    requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
-    requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
-    requires 0 <= idx < Nodes
-    requires |ios| > 0
-    requires ios[0].LIoOpReceive?
-    requires p.msg.Message_Propagation?
-    requires p in b[i-1].environment.sentPackets
-    requires p.dst == idx
-    requires idx == b[i-1].servers[idx].s.id
-    requires ios[0].r == p
-    requires PacketValid(p)
-    requires p.msg.start == b[i-1].servers[idx].s.next
-    requires p.msg.round == 2
-    requires ReceivePropagate(b[i-1].servers[idx].s, b[i].servers[idx].s, p, ExtractSentPacketsFromIos(ios))
-    ensures AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.meta.deps)
-{
-    var p := ios[0].r;
-    var s := b[i-1].servers[idx].s;
-    var s' := b[i].servers[idx].s;
+// lemma lemma_PropagationAtTail2(
+//     b:Behavior<CMState>,
+//     i:int,
+//     idx:int,
+//     p:Packet,
+//     ios:seq<CMIo>
+// )
+//     requires 0 < i 
+//     requires IsValidBehaviorPrefix(b, i)
+//     // requires forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1])
+//     requires CMNext(b[i-1], b[i])
+//     requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
+//     requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
+//     requires 0 <= idx < Nodes
+//     requires |ios| > 0
+//     requires ios[0].LIoOpReceive?
+//     requires p.msg.Message_Propagation?
+//     requires p in b[i-1].environment.sentPackets
+//     requires p.dst == idx
+//     requires idx == b[i-1].servers[idx].s.id
+//     requires ios[0].r == p
+//     requires PacketValid(p)
+//     requires p.msg.start == b[i-1].servers[idx].s.next
+//     requires p.msg.round == 2
+//     requires ReceivePropagate(b[i-1].servers[idx].s, b[i].servers[idx].s, p, ExtractSentPacketsFromIos(ios))
+//     // ensures AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.meta.deps)
+// {
+//     var p := ios[0].r;
+//     var s := b[i-1].servers[idx].s;
+//     var s' := b[i].servers[idx].s;
 
-    assert p.msg.start == s.next;
+//     assert p.msg.start == s.next;
 
-    assert 0 <= i - 1;
-    assert IsValidBehaviorPrefix(b, i-1);
-    assert forall j :: 0 <= j < i-1 ==> CMNext(b[j], b[j+1]);
-    // assert CMNext(b[i-2], b[i-1]);
-    assert CMNext(b[i-1], b[i]);
-    // assert CMNextCommon(b[i-1], b[i]);
-    assert forall j :: 0 <= j < Nodes ==> ServerValid(b[i-1].servers[j].s);
-    assert p.msg.Message_Propagation?;
-    assert CMInit(b[0]);
-    assert |b[i-1].servers| == Nodes;
-    assert p in b[i-1].environment.sentPackets;
-    assert PacketValid(p);
+//     assert 0 <= i - 1;
+//     assert IsValidBehaviorPrefix(b, i-1);
+//     // lemma_BehaviorValidImpliesAllStepsValid(b, i);
+//     // assert forall j :: 0 <= j < i ==> CMNext(b[j], b[j+1]);
+//     // assert CMNext(b[i-2], b[i-1]);
+//     assert CMNext(b[i-1], b[i]);
+//     // assert CMNextCommon(b[i-1], b[i]);
+//     assert forall j :: 0 <= j < Nodes ==> ServerValid(b[i-1].servers[j].s);
+//     assert p.msg.Message_Propagation?;
+//     assert CMInit(b[0]);
+//     assert |b[i-1].servers| == Nodes;
+//     assert p in b[i-1].environment.sentPackets;
+//     assert PacketValid(p);
 
-    assert p.dst == idx;
-    assert idx == s.id;
+//     assert p.dst == idx;
+//     assert idx == s.id;
 
-    var nodes := lemma_Propagation2(b, i-1, p);
-    assert |nodes| > 1;
-    assert nodes[0] == p.msg.start;
-    assert nodes[|nodes|-2] == p.src;
-    assert nodes[|nodes|-1] == p.dst;
-    assert forall j :: 0 <= j < |nodes| ==> 0 <= nodes[j] < Nodes;
-    assert forall j :: 0 <= j < |nodes| - 1 ==> NodesAreNext(nodes[j], nodes[j+1]);
-    assert forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc);
-    assert forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, p.msg.meta.deps);
+//     var nodes := lemma_Propagation2(b, i-1, p);
+//     assert |nodes| > 1;
+//     assert nodes[0] == p.msg.start;
+//     assert nodes[|nodes|-2] == p.src;
+//     assert nodes[|nodes|-1] == p.dst;
+//     assert forall j :: 0 <= j < |nodes| ==> 0 <= nodes[j] < Nodes;
+//     assert forall j :: 0 <= j < |nodes| - 1 ==> NodesAreNext(nodes[j], nodes[j+1]);
+//     assert forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc);
+//     // assert forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i-1].servers[nodes[j]].s.icache, b[i-1].servers[nodes[j]].s.ccache, p.msg.meta.deps);
 
-    lemma_ServerNextSatisfyNodesAreNext(s.id, s.next);
-    assert NodesAreNext(s.id, p.msg.start);
-    assert p.dst == s.id;
-    lemma_NodesFormACircle(p.msg.start, p.dst, nodes);
-    // assert forall j :: 0 <= j < Nodes ==> j in nodes;
-    assert NodesAreComplete(nodes);
+//     lemma_ServerNextSatisfyNodesAreNext(s.id, s.next);
+//     assert NodesAreNext(s.id, p.msg.start);
+//     assert p.dst == s.id;
+//     lemma_NodesFormACircle(p.msg.start, p.dst, nodes);
+//     // assert forall j :: 0 <= j < Nodes ==> j in nodes;
+//     assert NodesAreComplete(nodes);
 
-    var new_deps := p.msg.meta.deps;
-    var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, new_deps);
+//     var new_deps := p.msg.meta.deps;
+//     var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, new_deps);
     
 
-    var new_ccache' := InsertIntoCCache(new_ccache, p.msg.meta);
-    var new_icache' := AddMetaToICache(new_icache, p.msg.meta);
-    // reveal_DepsIsMet();
-    lemma_AddMetaToCacheImpliesMetaIsMetInNewCache(new_icache, new_ccache, p.msg.meta);
-    assert DepsIsMet(new_icache', new_ccache', p.msg.meta.deps);
+//     var new_ccache' := InsertIntoCCache(new_ccache, p.msg.meta);
+//     var new_icache' := AddMetaToICache(new_icache, p.msg.meta);
+//     // reveal_DepsIsMet();
+//     lemma_AddMetaToCacheImpliesMetaIsMetInNewCache(new_icache, new_ccache, p.msg.meta);
+//     // assert DepsIsMet(new_icache', new_ccache', p.msg.meta.deps);
 
-    assert VCHappendsBefore(p.msg.meta.vc, new_ccache'[p.msg.key].vc) || VCEq(p.msg.meta.vc, new_ccache'[p.msg.key].vc);
-    // reveal_DepsIsMet();
-    // lemma_DepsIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, p.msg.meta.deps); // this could be proved, but may timeout
+//     assert VCHappendsBefore(p.msg.meta.vc, new_ccache'[p.msg.key].vc) || VCEq(p.msg.meta.vc, new_ccache'[p.msg.key].vc);
+//     // reveal_DepsIsMet();
+//     // lemma_DepsIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, p.msg.meta.deps); // this could be proved, but may timeout
     
-    lemma_AVersionOfAKeyIsMetIsTransitive(b, i, p.msg.key, p.msg.meta.vc, p.msg.meta.deps, nodes);
-    // assert forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc);
-    // assert forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.meta.deps);
-    // assert forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc);
-    assert nodes[|nodes|-1] == idx;
+//     lemma_AVersionOfAKeyIsMetIsTransitive(b, i, p.msg.key, p.msg.meta.vc, p.msg.meta.deps, nodes);
+//     // assert forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc);
+//     // assert forall j :: 0 <= j < |nodes| - 1 ==> DepsIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.meta.deps);
+//     // assert forall j :: 0 <= j < |nodes| - 1 ==> AVersionOfAKeyIsMet(b[i].servers[nodes[j]].s.icache, b[i].servers[nodes[j]].s.ccache, p.msg.key, p.msg.meta.vc);
+//     assert nodes[|nodes|-1] == idx;
     
-    lemma_DepsIsMetForNodes(b, i, nodes, p.msg.meta.deps);
+//     // lemma_DepsIsMetForNodes(b, i, nodes, p.msg.meta.deps);
 
-    assert |b[i].servers| == Nodes;
-    assert forall j :: 0 <= j < Nodes ==> ServerValid(b[i].servers[j].s);
-    assert |nodes| > 1;
-    assert forall j :: 0 <= j < |nodes| ==> 0 <= nodes[j] < Nodes;
-    // lemma_Nodes(nodes);
-    // assert forall j :: 0 <= j < Nodes ==> j in nodes;
-    lemma_DepsIsMetForAllNodes(b, i, nodes, p.msg.meta.deps);
-    assert AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.meta.deps);
-}
+//     assert |b[i].servers| == Nodes;
+//     assert forall j :: 0 <= j < Nodes ==> ServerValid(b[i].servers[j].s);
+//     assert |nodes| > 1;
+//     assert forall j :: 0 <= j < |nodes| ==> 0 <= nodes[j] < Nodes;
+//     // lemma_Nodes(nodes);
+//     // assert forall j :: 0 <= j < Nodes ==> j in nodes;
+//     // lemma_DepsIsMetForAllNodes(b, i, nodes, p.msg.meta.deps);
+//     // assert AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.meta.deps);
+// }
 
 predicate {:opaque} NodesAreComplete(
     nodes:seq<int>
@@ -131,36 +132,36 @@ predicate {:opaque} NodesAreComplete(
     forall j :: 0 <= j < Nodes ==> j in nodes
 }
 
-lemma lemma_AddMetaToCacheImpliesMetaIsMetInNewCache(
-    icache:ICache,
-    ccache:CCache,
-    meta:Meta
-)
-    requires ICacheValid(icache)
-    requires CCacheValid(ccache)
-    requires MetaValid(meta)
-    requires forall k :: k in meta.deps ==> k in icache
-    requires forall k :: k in Keys_domain ==> k in icache && k in ccache
-    ensures var icache' := AddMetaToICache(icache, meta);
-            var ccache' := InsertIntoCCache(ccache, meta);
-            DepsIsMet(icache', ccache', meta.deps)
-{
-    reveal_DepsIsMet();
-    lemma_ReceiveAPropagationImpliesTheDepsAreAlreadyMet(icache, ccache, meta.deps);
+// lemma lemma_AddMetaToCacheImpliesMetaIsMetInNewCache(
+//     icache:ICache,
+//     ccache:CCache,
+//     meta:Meta
+// )
+//     requires ICacheValid(icache)
+//     requires CCacheValid(ccache)
+//     requires MetaValid(meta)
+//     requires forall k :: k in meta.deps ==> k in icache
+//     requires forall k :: k in Keys_domain ==> k in icache && k in ccache
+//     ensures var icache' := AddMetaToICache(icache, meta);
+//             var ccache' := InsertIntoCCache(ccache, meta);
+//             DepsIsMet(icache', ccache', meta.deps)
+// {
+//     reveal_DepsIsMet();
+//     lemma_ReceiveAPropagationImpliesTheDepsAreAlreadyMet(icache, ccache, meta.deps);
 
-    var icache' := AddMetaToICache(icache, meta);
-    var ccache' := InsertIntoCCache(ccache, meta);
-    assert meta in icache'[meta.key];
-    assert VCHappendsBefore(meta.vc, ccache'[meta.key].vc) || VCEq(meta.vc, ccache'[meta.key].vc);
-    // assert forall k :: k in meta.deps ==> VCHappendsBefore(meta.deps[k], ccache'[k].vc) || VCEq(meta.deps[k], ccache'[k].vc);
-    assert DepsIsMet(icache', ccache', meta.deps);
-    // forall k | k in meta.deps 
-    // {
-    //     var vc := meta.deps[k];
-    //     var m := FoldMetaSet2(ccache'[k], icache'[k]);
-    //     assert VCEq(vc, m.vc) || VCHappendsBefore(vc, m.vc);
-    // }
-}
+//     var icache' := AddMetaToICache(icache, meta);
+//     var ccache' := InsertIntoCCache(ccache, meta);
+//     assert meta in icache'[meta.key];
+//     assert VCHappendsBefore(meta.vc, ccache'[meta.key].vc) || VCEq(meta.vc, ccache'[meta.key].vc);
+//     // assert forall k :: k in meta.deps ==> VCHappendsBefore(meta.deps[k], ccache'[k].vc) || VCEq(meta.deps[k], ccache'[k].vc);
+//     assert DepsIsMet(icache', ccache', meta.deps);
+//     // forall k | k in meta.deps 
+//     // {
+//     //     var vc := meta.deps[k];
+//     //     var m := FoldMetaSet2(ccache'[k], icache'[k]);
+//     //     assert VCEq(vc, m.vc) || VCHappendsBefore(vc, m.vc);
+//     // }
+// }
 
 
 lemma lemma_ServerNextSatisfyNodesAreNext(id:int, next:int)
@@ -171,7 +172,7 @@ lemma lemma_ServerNextSatisfyNodesAreNext(id:int, next:int)
 
 }
 
-lemma {:axiom} lemma_NodesFormACircle(start:int, end:int, nodes:seq<int>)
+lemma lemma_NodesFormACircle(start:int, end:int, nodes:seq<int>)
     requires 0 <= start < Nodes
     requires 0 <= end < Nodes
     requires |nodes| > 1
@@ -182,7 +183,65 @@ lemma {:axiom} lemma_NodesFormACircle(start:int, end:int, nodes:seq<int>)
     requires NodesAreNext(end, start)
     // ensures forall j :: 0 <= j < Nodes ==> j in nodes
     ensures NodesAreComplete(nodes)
+{
+    reveal_NodesAreComplete();
+    // assert |nodes| <= Nodes;
+    if |nodes| < Nodes {
+        // Contradiction: 
+        // If length < Nodes, then when you walk NodesAreNext steps from start, you can't return to start.
+        // Because NodesAreNext always increments index by 1 mod Nodes.
+        var last := nodes[|nodes|-1];
+        var expectedNext :=
+            if last == Nodes-1 then 0 else last+1;
+        assert expectedNext != start;
+        assert NodesAreNext(last, start);
+        // Contradiction
+        assert false;
+    }
 
+    forall j | 0 <= j < Nodes
+        ensures j in nodes
+    {
+        // Because the sequence has length Nodes, and starts at `start` and advances one by one modulo Nodes,
+        // each position must appear exactly once.
+        var offset := (j - start + Nodes) % Nodes;
+        assert offset < Nodes;
+        assert offset < |nodes|;
+        var at := (start + offset) % Nodes;
+        // At position offset in the sequence, expect index `at`
+        if offset == 0 {
+            assert nodes[offset] == start;
+        } else {
+            // Inductively: nodes[offset] = (start + offset) mod Nodes
+            // Let's prove this by induction
+            var k := offset;
+            // base case
+            if k == 0 {
+                assert nodes[0] == start;
+            } else {
+                // Inductive hypothesis: nodes[k-1] == (start + k -1) % Nodes
+                // Prove nodes[k] == (start + k) % Nodes
+                var pred := nodes[k-1];
+                assert pred == (start + k -1) % Nodes;
+                // nodes[k] is the next node
+                assert NodesAreNext(pred, nodes[k]);
+                if pred == Nodes-1 {
+                    assert nodes[k] == 0;
+                    assert (start + k) % Nodes == 0;
+                } else {
+                    assert nodes[k] == pred +1;
+                    assert (start + k) % Nodes == (pred +1) % Nodes;
+                }
+            }
+            // From the above, nodes[k] == (start+k)%Nodes
+            assert nodes[k] == (start+k)%Nodes;
+        }
+        // Finally, since j == (start+offset)%Nodes
+        assert at == j;
+        assert nodes[offset] == j;
+    }
+    assert forall j :: 0 <= j < Nodes ==> j in nodes;
+}
 
 lemma lemma_DepsIsMetForNodes(
     b:Behavior<CMState>,

@@ -1,3 +1,5 @@
+
+
 module CausalMesh_Types_i {
 
     const Nodes:nat := 3
@@ -281,26 +283,19 @@ module CausalMesh_Types_i {
         requires forall mm :: mm in metas ==> MetaValid(mm) && mm.key == acc.key
         requires m.key == acc.key
         ensures FoldMetaSet2(acc, metas + {m}) == FoldMetaSet2(FoldMetaSet2(acc, metas), {m})
+        decreases |metas|
     // {
     //     if |metas| == 0 {
-    //         // Base case: metas == {}
     //         assert FoldMetaSet2(acc, metas + {m}) == FoldMetaSet2(acc, {m});
     //     } else {
-    //         // Pick an element
     //         var x :| x in metas;
-    //         // Inductive hypothesis: for (metas - {x})
+
     //         lemma_FoldMetaSet2_Decompose(MetaMerge(acc, x), metas - {x}, m);
 
-    //         // Now show that
-    //         // FoldMetaSet2(acc, metas + {m})
-    //         // == FoldMetaSet2(MetaMerge(acc, x), (metas - {x}) + {m})
+    //         // assert FoldMetaSet2(MetaMerge(acc, x), metas-{x}+{m}) == FoldMetaSet2(FoldMetaSet2(MetaMerge(acc,x), metas-{x}), {m});
 
-    //         // Because metas + {m} = (metas - {x}) + {x} + {m} = (metas - {x}) + {m} + {x}
-    //         // But since set union is commutative, just expanding definition suffices:
-
-    //         // unfold FoldMetaSet2(acc, metas + {m})
-    //         assert FoldMetaSet2(acc, metas + {m}) ==
-    //                FoldMetaSet2(MetaMerge(acc, x), (metas - {x}) + {m});
+    //         // assert FoldMetaSet2(acc, metas + {m}) ==
+    //         //        FoldMetaSet2(MetaMerge(acc, x), (metas - {x}) + {m});
     //     }
     // }
 
@@ -348,8 +343,55 @@ module CausalMesh_Types_i {
             var x :| x in metas;
             FoldDependencyFromMetaSet(DependencyMerge(acc, x.deps), metas - {x})
     }
+    
+    lemma lemma_VCMergeBounded(
+        v1: VectorClock,
+        v2: VectorClock,
+        bound: VectorClock
+    )
+        requires VectorClockValid(v1)
+        requires VectorClockValid(v2)
+        requires VectorClockValid(bound)
+        requires VCHappendsBefore(v1,bound) || VCEq(v1,bound)
+        requires VCHappendsBefore(v2,bound) || VCEq(v2,bound)
+        ensures VCHappendsBefore(VCMerge(v1,v2), bound) || VCEq(VCMerge(v1,v2), bound)
+    {
 
-    lemma {:axiom} lemma_FoldDependencyFromMetaSet(
+    }
+
+    lemma lemma_DependencyMergeBounded(
+        d1: Dependency,
+        d2: Dependency,
+        vc: VectorClock
+    )
+        requires DependencyValid(d1)
+        requires DependencyValid(d2)
+        requires VectorClockValid(vc)
+        requires forall k :: k in d1 ==> VCHappendsBefore(d1[k], vc) || VCEq(d1[k], vc)
+        requires forall k :: k in d2 ==> VCHappendsBefore(d2[k], vc) || VCEq(d2[k], vc)
+        ensures forall k :: k in DependencyMerge(d1, d2) ==> VCHappendsBefore(DependencyMerge(d1,d2)[k], vc) || VCEq(DependencyMerge(d1,d2)[k], vc)
+    {
+        forall k
+            ensures k in DependencyMerge(d1,d2) ==> 
+                    VCHappendsBefore(DependencyMerge(d1,d2)[k], vc) || VCEq(DependencyMerge(d1,d2)[k], vc)
+        {
+            if k in d1 && k in d2 {
+                var v1 := d1[k];
+                var v2 := d2[k];
+                assert VCHappendsBefore(v1, vc) || VCEq(v1, vc);
+                assert VCHappendsBefore(v2, vc) || VCEq(v2, vc);
+                // merge = VCMerge(v1,v2) <= vc
+                lemma_VCMergeBounded(v1, v2, vc);
+            } else if k in d1 {
+                assert VCHappendsBefore(d1[k], vc) || VCEq(d1[k], vc);
+            } else if k in d2 {
+                assert VCHappendsBefore(d2[k], vc) || VCEq(d2[k], vc);
+            }
+        }
+    }
+
+
+    lemma lemma_FoldDependencyFromMetaSet(
         deps:Dependency,
         metas:set<Meta>,
         vc:VectorClock
@@ -361,6 +403,23 @@ module CausalMesh_Types_i {
         requires forall k :: k in deps ==> VCHappendsBefore(deps[k], vc) || VCEq(deps[k], vc)
         ensures var res := FoldDependencyFromMetaSet(deps, metas);
                 forall k :: k in res ==> VCHappendsBefore(res[k], vc) || VCEq(res[k], vc)
+        decreases |metas|
+    {
+        if |metas| == 0 {
+            var res := FoldDependencyFromMetaSet(deps, metas);
+            assert res == deps;
+            assert forall k :: k in res ==> VCHappendsBefore(res[k], vc) || VCEq(res[k], vc);
+            return;
+        }
+
+        var x :| x in metas;
+        var merged := DependencyMerge(deps, x.deps);
+
+        
+        lemma_DependencyMergeBounded(deps, x.deps, vc);
+
+        lemma_FoldDependencyFromMetaSet(merged, metas - {x}, vc);
+    }
     
     // lemma lemma_FoldDependencyFromMetaSet2(
     //     acc: Dependency,
@@ -418,10 +477,6 @@ module CausalMesh_Types_i {
     //     }
     // }
 
-
-    lemma {:axiom} lemma_MapRemoveSubsetOfTheValOfKey<K,V>(m:map<K,set<V>>, k:K, s:set<V>)
-        requires k in m && m[k] >= s
-        ensures |m.Values| > |m[k := m[k] - s].Values|
     
 
     function EmptyMeta(k:Key) : (res:Meta)
@@ -444,6 +499,9 @@ module CausalMesh_Types_i {
         ensures CCacheValid(res)
         ensures m.key in res
         ensures VCHappendsBefore(m.vc, res[m.key].vc) || VCEq(m.vc, res[m.key].vc)
+        // ensures forall k :: k in c && k != m.key ==> k in res && VCEq(c[k].vc, res[k].vc)
+        ensures forall k :: k in res && k != m.key ==> k in c && VCEq(c[k].vc, res[k].vc)
+        ensures if m.key in c then  res[m.key].vc == VCMerge(m.vc, c[m.key].vc)  else res[m.key].vc == m.vc
     {
         if m.key in c then
             c[m.key := MetaMerge(c[m.key], m)]
@@ -503,7 +561,7 @@ module CausalMesh_Types_i {
             AddMetasToICache(AddMetaToICache(c, m), new_metas)
     }
 
-    lemma {:axiom} lemma_AddMetasToICache_ensures_contains(
+    lemma lemma_AddMetasToICache_ensures_contains(
         c: ICache,
         metas: set<Meta>
     )
@@ -511,25 +569,23 @@ module CausalMesh_Types_i {
         requires forall m :: m in metas ==> MetaValid(m) && forall k :: k in m.deps ==> k in c
         ensures forall m :: m in metas ==> m.key in AddMetasToICache(c, metas) && m in AddMetasToICache(c, metas)[m.key]
         ensures forall k :: k in c ==> k in AddMetasToICache(c, metas) && forall m :: m in c[k] ==> m in AddMetasToICache(c, metas)[k]
-        // ensures ICacheValid(AddMetasToICache(c, metas))
         decreases |metas|
-    // {
-    //     if |metas| == 0 {
-    //         assert AddMetasToICache(c, metas) == c;
-    //     } else {
-    //         var m :| m in metas;
-    //         var c2 := AddMetaToICache(c, m);
+    {
+        if |metas| == 0 {
+            assert AddMetasToICache(c, metas) == c;
+            assert forall m :: m in metas ==> m.key in AddMetasToICache(c, metas) && m in AddMetasToICache(c, metas)[m.key];
+        } else {
+            var m :| m in metas;
+            var c2 := AddMetaToICache(c, m);
 
-    //         assert m.key in c2 && m in c2[m.key];
+            assert m.key in c2 && m in c2[m.key];
 
-    //         assert ICacheValid(c2);
+            assert ICacheValid(c2);
 
-    //         lemma_AddMetasToICache_ensures_contains(c2, metas - {m});
-
-    //         assert forall m0 :: m0 in metas ==> 
-    //             m0 in AddMetasToICache(c, metas)[m0.key];
-    //     }
-    // }
+            lemma_AddMetasToICache_ensures_contains(c2, metas - {m});
+            assert forall m :: m in metas - {m} ==> m.key in AddMetasToICache(c2, metas - {m}) && m in AddMetasToICache(c2, metas - {m})[m.key];
+        }
+    }
 
     predicate NodesAreNext(i:int, j:int)
         requires 0 <= i < Nodes

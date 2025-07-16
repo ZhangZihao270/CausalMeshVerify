@@ -28,6 +28,8 @@ import opened Collections__Seqs_s
 import opened Collections__Maps_i
 import opened Collections__Maps2_s
 
+
+
 lemma lemma_ReadRepliesIsMetOnAllServersPrefix(
     b:Behavior<CMState>,
     i:int
@@ -46,6 +48,7 @@ lemma lemma_ReadRepliesIsMetOnAllServersPrefix(
     }
     
     if i == 1 {
+        lemma_BehaviorValidImpliesOneStepValid(b, i);
         lemma_ReadRepliesIsMetOnAllServersForIndexOne(b, i);
         return;
     }
@@ -87,7 +90,7 @@ lemma lemma_ReadRepliesIsMetOnAllServersPrefix(
     assert AllServersAreMet(b, i-1);
     assert AllReadDepsAreMet(b, i-1);
     assert AllVersionsInDepsAreMetOnAllServers(b, i-1, p_read.msg.deps_read);
-    lemma_ServerReadReplyIsMetOnAllServers(b, i, idx, p_read, [p]);
+    lemma_ServerReadReplyIsMetOnAllServers2(b, i, idx, p_read, [p]);
 
     assert AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache);
     // assert AllDepsInICacheAreMetOnAllServers(b, i, b[i].servers[idx].s.icache);
@@ -210,6 +213,8 @@ lemma lemma_ReadRepliesIsMetOnAllServersConstant(
     assert AllReadRepliesAreMet(b, i);
 }
 
+
+
 lemma lemma_ReadRepliesIsMetOnAllServersTransfer(
     b:Behavior<CMState>,
     i:int,
@@ -233,6 +238,7 @@ lemma lemma_ReadRepliesIsMetOnAllServersTransfer(
     requires ReceiveRead(b[i-1].servers[idx].s, b[i].servers[idx].s, p_read, [p])
     requires AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_rreply)
     requires AVersionIsMetOnAllServers(b, i, p.msg.key_rreply, p.msg.vc_rreply)
+    requires VCHappendsBefore(p.msg.vc_rreply, p.msg.pvc_rreply) || VCEq(p.msg.vc_rreply, p.msg.pvc_rreply)
     ensures AllReadRepliesAreMet(b, i)
 {
     assert AllReadRepliesAreMet(b, i-1);
@@ -265,7 +271,8 @@ lemma lemma_ReadRepliesIsMetOnAllServersTransfer(
     assert AllReadRepliesAreMet(b, i);
 }
 
-lemma lemma_ServerReadReplyIsMetOnAllServers(
+
+lemma lemma_ServerReadReplyIsMetOnAllServers2(
     b:Behavior<CMState>,
     i:int,
     idx:int,
@@ -285,9 +292,11 @@ lemma lemma_ServerReadReplyIsMetOnAllServers(
     // requires ServerNextDoesNotDecreaseVersions(b[i-1], b[i])
     requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
     requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
+    requires AllReadDepsSmallerThanPVCRead(p.msg.pvc_read, p.msg.deps_read)
     ensures AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache)
     ensures AllVersionsInDepsAreMetOnAllServers(b, i, sp[0].msg.deps_rreply)
     ensures AVersionIsMetOnAllServers(b, i, sp[0].msg.key_rreply, sp[0].msg.vc_rreply)
+    ensures VCHappendsBefore(sp[0].msg.vc_rreply, sp[0].msg.pvc_rreply) || VCEq(sp[0].msg.vc_rreply, sp[0].msg.pvc_rreply)
 {
     var s := b[i-1].servers[idx].s;
     var s' := b[i].servers[idx].s;
@@ -296,13 +305,16 @@ lemma lemma_ServerReadReplyIsMetOnAllServers(
     assert p_reply.msg.Message_Read_Reply?;
     assert ServerValid(s);
 
+    var new_pvc := if (VCHappendsBefore(p.msg.pvc_read, s.pvc)) then s.pvc else VCMerge(s.pvc, p.msg.pvc_read);
+    assert VCHappendsBefore(p.msg.pvc_read, new_pvc) || VCEq(p.msg.pvc_read, new_pvc);
+    assert forall k :: k in deps ==> VCHappendsBefore(deps[k], new_pvc) || VCEq(deps[k], new_pvc);
     var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, deps);
     assert i-1 > 0;
     assert IsValidBehaviorPrefix(b, i-1);
     assert CMNext(b[i-2], b[i-1]);
     assert AllVersionsInDepsAreMetOnAllServers(b, i-1, deps);
     assert AllVersionsInCCacheAreMetOnAllServers(b, i-1, b[i-1].servers[idx].s.ccache);
-    lemma_VersionsAfterPullDepsAreMetOnAllServers(b, i-1, idx, deps);
+    lemma_VersionsAfterPullDepsAreMetOnAllServers2(b, i-1, idx, new_pvc, deps);
     assert AllVersionsInCCacheAreMetOnAllServers(b, i-1, new_ccache);
     assert new_icache == s.icache;
 
@@ -323,6 +335,65 @@ lemma lemma_ServerReadReplyIsMetOnAllServers(
     assert AllVersionsInDepsAreMetOnAllServers(b, i, p_reply.msg.deps_rreply);
     assert AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache);
 }
+
+// lemma lemma_ServerReadReplyIsMetOnAllServers(
+//     b:Behavior<CMState>,
+//     i:int,
+//     idx:int,
+//     p:Packet,
+//     sp:seq<Packet>
+// )
+//     requires i > 1
+//     requires IsValidBehaviorPrefix(b, i)
+//     requires CMNext(b[i-2], b[i-1])
+//     requires CMNext(b[i-1], b[i])
+//     requires p.msg.Message_Read?
+//     requires PacketValid(p)
+//     requires 0 <= idx < Nodes
+//     requires ReceiveRead(b[i-1].servers[idx].s, b[i].servers[idx].s, p, sp)
+//     requires AllVersionsInCCacheAreMetOnAllServers(b, i-1, b[i-1].servers[idx].s.ccache)
+//     requires AllVersionsInDepsAreMetOnAllServers(b, i-1, p.msg.deps_read)
+//     // requires ServerNextDoesNotDecreaseVersions(b[i-1], b[i])
+//     requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
+//     requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
+//     ensures AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache)
+//     ensures AllVersionsInDepsAreMetOnAllServers(b, i, sp[0].msg.deps_rreply)
+//     ensures AVersionIsMetOnAllServers(b, i, sp[0].msg.key_rreply, sp[0].msg.vc_rreply)
+// {
+//     var s := b[i-1].servers[idx].s;
+//     var s' := b[i].servers[idx].s;
+//     var deps := p.msg.deps_read;
+//     var p_reply := sp[0];
+//     assert p_reply.msg.Message_Read_Reply?;
+//     assert ServerValid(s);
+
+//     var (new_icache, new_ccache) := PullDeps2(s.icache, s.ccache, deps);
+//     assert i-1 > 0;
+//     assert IsValidBehaviorPrefix(b, i-1);
+//     assert CMNext(b[i-2], b[i-1]);
+//     assert AllVersionsInDepsAreMetOnAllServers(b, i-1, deps);
+//     assert AllVersionsInCCacheAreMetOnAllServers(b, i-1, b[i-1].servers[idx].s.ccache);
+//     lemma_VersionsAfterPullDepsAreMetOnAllServers(b, i-1, idx, deps);
+//     assert AllVersionsInCCacheAreMetOnAllServers(b, i-1, new_ccache);
+//     assert new_icache == s.icache;
+
+//     assert s'.icache == new_icache;
+//     assert s'.ccache == new_ccache;
+
+//     assert AllVersionsInCCacheAreMetOnAllServers(b, i-1, s'.ccache);
+
+//     assert AllVersionsInCCacheAreMetOnAllServers(b, i-1, b[i].servers[idx].s.ccache);
+
+//     reveal_AllVersionsInCCacheAreMetOnAllServers();
+//     assert AVersionIsMetOnAllServers(b, i-1, p_reply.msg.key_rreply, p_reply.msg.vc_rreply);
+//     assert AllVersionsInDepsAreMetOnAllServers(b, i-1, p_reply.msg.deps_rreply);
+
+//     lemma_VersionMetIsTransitive(b, i, idx, p_reply.msg.key_rreply, p_reply.msg.vc_rreply, p_reply.msg.deps_rreply);
+
+//     assert AVersionIsMetOnAllServers(b, i, p_reply.msg.key_rreply, p_reply.msg.vc_rreply);
+//     assert AllVersionsInDepsAreMetOnAllServers(b, i, p_reply.msg.deps_rreply);
+//     assert AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache);
+// }
 
 
 lemma lemma_VersionMetIsTransitive(

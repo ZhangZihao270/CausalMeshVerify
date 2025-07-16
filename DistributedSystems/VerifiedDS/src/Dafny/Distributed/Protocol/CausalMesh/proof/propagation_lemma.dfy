@@ -221,25 +221,29 @@ lemma {:axiom} lemma_DepsInPropagationIsInWriteDepsOrLocals_helper(
     requires DepsIsMet(icache, ccache, deps)
     ensures DepsIsMet(new_icache, ccache, FoldDependencyFromMetaSet(deps, metas))
 // {
+//     reveal_DepsIsMet();
 //     var merged := FoldDependencyFromMetaSet(deps, metas);
 //     assert DepsIsMet(icache, ccache, deps);
 //     lemma_AddMetasToICache_ensures_contains(icache, metas + {meta});
 //     assert forall k :: k in icache ==> k in new_icache && forall m :: m in icache[k] ==> m in new_icache[k];
+//     assume DepsIsMet(new_icache, ccache, deps);
 
 //     forall k | k in merged 
 //     {
-//         var m1 := FoldMetaSet2(ccache[k], icache[k]);
-//         var m2 := FoldMetaSet2(ccache[k], new_icache[k]);
+//         // var m1 := FoldMetaSet2(ccache[k], icache[k]);
+//         // var m2 := FoldMetaSet2(ccache[k], new_icache[k]);
 
-//         assert k in icache && k in new_icache;
-//         assert forall m :: m in icache[k] ==> m in new_icache[k];
-//         assume VCHappendsBefore(m1.vc, m2.vc) || VCEq(m1.vc, m2.vc);
+//         // assert k in icache && k in new_icache;
+//         // assert forall m :: m in icache[k] ==> m in new_icache[k];
+//         // assume VCHappendsBefore(m1.vc, m2.vc) || VCEq(m1.vc, m2.vc);
 
         
-//         assert AVersionOfAKeyIsMet(icache, ccache, k, deps[k]);
+//         // assert AVersionOfAKeyIsMet(icache, ccache, k, deps[k]);
 //         // assert VCEq(deps[k], m1.vc) || VCHappendsBefore(deps[k], m1.vc);
 //     }
 //     // assert DepsIsMet(new_icache, ccache, deps);
 // }
+
+
 
 }

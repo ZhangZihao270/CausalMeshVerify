@@ -180,7 +180,7 @@ lemma lemma_ActionThatSendsPropagationIsReceivePropogateOrReceiveWrite(
     ensures ios[0].LIoOpReceive?
     ensures ios[0].r.msg.Message_Write? || ios[0].r.msg.Message_Propagation?
     ensures LIoOpSend(p) in ios
-    // ensures ios[0].r.dst == idx
+    ensures ios[0].r.dst == idx
     ensures ios[0].r.msg.Message_Propagation? ==> ReceivePropagate(ps.servers[idx].s, ps'.servers[idx].s, ios[0].r, ExtractSentPacketsFromIos(ios))
     ensures ios[0].r.msg.Message_Write? ==> ReceiveWrite(ps.servers[idx].s, ps'.servers[idx].s, ios[0].r, ExtractSentPacketsFromIos(ios))
 {
@@ -189,12 +189,18 @@ lemma lemma_ActionThatSendsPropagationIsReceivePropogateOrReceiveWrite(
     idx, ios :| CMNextServer(ps, ps', idx, ios) && LIoOpSend(p) in ios;
 
     assert CMNextServer(ps, ps', idx, ios);
+    assert LEnvironment_Next(ps.environment, ps'.environment);
+    assert IsValidLEnvStep(ps.environment, ps.environment.nextStep);
+    assert ps.environment.nextStep.actor == idx;
+    assert IsValidLIoOp(ios[0], ps.environment.nextStep.actor, ps.environment);
+    
     assert LServerNext(ps.servers[idx], ps'.servers[idx], ios);
     assert ServerNextProcessPacket(ps.servers[idx].s, ps'.servers[idx].s, ios);
     assert ServerValid(ps.servers[idx].s);
     assert |ios| >= 1;
     assert !ios[0].LIoOpTimeoutReceive?;
     assert ios[0].LIoOpReceive?;
+    assert ios[0].r.dst == idx;
     assert PacketValid(ios[0].r);
     if ios[0].r.msg.Message_Read? || ios[0].r.msg.Message_Write? || ios[0].r.msg.Message_Propagation?{
         assert ServerProcessPacket(ps.servers[idx].s, ps'.servers[idx].s, ios);
@@ -210,6 +216,7 @@ lemma lemma_ActionThatSendsPropagationIsReceivePropogateOrReceiveWrite(
         //     ReceiveWrite(ps.servers[idx].s, ps'.servers[idx].s, ios[0].r, ExtractSentPacketsFromIos(ios));
     } 
     else {
+        // assert ios[0].r.dst == idx;
         assert |ios| == 1;
         var sent_packets := ExtractSentPacketsFromIos(ios);
         assert sent_packets == [];

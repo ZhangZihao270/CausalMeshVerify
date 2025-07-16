@@ -70,6 +70,16 @@ predicate {:opaque} AllVersionsInDepsAreMetOnAllServers(
     forall k :: k in deps ==> AVersionIsMetOnAllServers(b, i, k, deps[k])
 }
 
+predicate AllReadDepsSmallerThanPVCRead(
+    vc:VectorClock,
+    deps:Dependency
+)
+    requires DependencyValid(deps)
+    requires VectorClockValid(vc)
+{
+    forall k :: k in deps ==> VCHappendsBefore(deps[k], vc) || VCEq(deps[k], vc)
+}
+
 predicate {:opaque} AllVersionsInDepsAreMetOnAllServers2(
     b:Behavior<CMState>,
     i:int,
@@ -164,6 +174,7 @@ predicate AllClientsAreMet(
 
     forall j :: 0 <= j < |b[i].clients| ==>
         AllVersionsInDepsAreMetOnAllServers(b, i, b[i].clients[j].c.deps)
+        && (forall k :: k in b[i].clients[j].c.deps ==> VCHappendsBefore(b[i].clients[j].c.deps[k], b[i].clients[j].c.pvc) || VCEq(b[i].clients[j].c.deps[k], b[i].clients[j].c.pvc))
 }
 
 predicate AllReadDepsAreMet(
@@ -179,6 +190,7 @@ predicate AllReadDepsAreMet(
 
     forall p :: p in b[i].environment.sentPackets && p.msg.Message_Read? ==> 
         AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_read)
+        && AllReadDepsSmallerThanPVCRead(p.msg.pvc_read, p.msg.deps_read)
 }
 
 predicate /*{:opaque}*/ AllWriteDepsAreMet(
@@ -208,6 +220,7 @@ predicate AllReadRepliesAreMet(
 
     forall p :: p in b[i].environment.sentPackets && p.msg.Message_Read_Reply? ==> 
         AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_rreply) && AVersionIsMetOnAllServers(b, i, p.msg.key_rreply, p.msg.vc_rreply)
+        && (VCHappendsBefore(p.msg.vc_rreply, p.msg.pvc_rreply) || VCEq(p.msg.vc_rreply, p.msg.pvc_rreply))
 }
 
 predicate CCacheDoesNotDecrease(
