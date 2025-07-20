@@ -826,7 +826,7 @@ module CausalMesh_Cache_i {
         var m := Meta(p.msg.key_rreply, p.msg.vc_rreply, p.msg.deps_rreply);
         var new_pvc := if (VCHappendsBefore(p.msg.pvc_rreply, c.pvc)) then c.pvc else VCMerge(c.pvc, p.msg.pvc_rreply);
 
-        && c' == c.(local := c.local[p.msg.key_rreply := m], deps := DependencyInsertOrMerge(c.deps, p.msg.key_rreply, p.msg.vc_rreply), pvc := new_pvc)
+        && c' == c.(/*local := c.local[p.msg.key_rreply := m],*/ deps := DependencyInsertOrMerge(c.deps, p.msg.key_rreply, p.msg.vc_rreply), pvc := new_pvc)
         && sp == []
     }
 

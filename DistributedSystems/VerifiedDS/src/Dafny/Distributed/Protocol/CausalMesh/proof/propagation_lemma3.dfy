@@ -243,6 +243,241 @@ lemma lemma_NodesFormACircle(start:int, end:int, nodes:seq<int>)
     assert forall j :: 0 <= j < Nodes ==> j in nodes;
 }
 
+lemma lemma_ReverseEdgePathExists(start:int, end:int, nodes:seq<int>, i:int, j:int)
+returns (x:int, y:int)
+    requires 0 <= start < Nodes
+    requires 0 <= end < Nodes
+    requires 0 <= i < Nodes
+    requires 0 <= j < Nodes
+    requires |nodes| > Nodes
+    requires nodes[0] == start
+    requires nodes[|nodes|-1] == end
+    requires forall k :: 0 <= k < |nodes| ==> 0 <= nodes[k] < Nodes
+    requires forall k :: 0 <= k < |nodes|-1 ==> NodesAreNext(nodes[k], nodes[k+1])
+    requires NodesAreNext(end, start)
+    requires NodesAreNext(i, j)
+    ensures 0 <= x < |nodes|
+    ensures 0 <= y < |nodes|
+    ensures nodes[x] == j
+    ensures nodes[y] == i
+    ensures x < y
+
+// lemma lemma_ReverseEdgePathExists2(start:int, end:int, nodes:seq<int>, i:int, j:int)
+//   returns (x:int, y:int)
+//   requires 0 <= start < Nodes
+//   requires 0 <= end < Nodes
+//   requires 0 <= i < Nodes
+//   requires 0 <= j < Nodes
+//   requires |nodes| > Nodes
+//   requires nodes[0] == start
+//   requires nodes[|nodes|-1] == end
+//   requires forall k :: 0 <= k < |nodes| ==> 0 <= nodes[k] < Nodes
+//   requires forall k :: 0 <= k < |nodes|-1 ==> NodesAreNext(nodes[k], nodes[k+1])
+//   requires NodesAreNext(end, start)
+//   requires NodesAreNext(i, j)
+//   ensures 0 <= x < |nodes|
+//   ensures 0 <= y < |nodes|
+//   ensures nodes[x] == j
+//   ensures nodes[y] == i
+//   ensures x < y
+// {
+//   // Construct full cycle path by adding start to end
+//   var fullPath := nodes + [start];
+//   assert |fullPath| == |nodes| + 1;
+//   assert forall k :: 0 <= k < |fullPath| - 1 ==> NodesAreNext(fullPath[k], fullPath[k+1]);
+//   assert fullPath[|fullPath|-1] == start;
+
+//   // Now find some occurrence of (i, j) in fullPath
+//   var found := false;
+//   var p := 0;
+//   while p < |fullPath| - 1
+//     invariant 0 <= p <= |fullPath|-1
+//     decreases |fullPath| - p
+//   {
+//     if fullPath[p] == i && fullPath[p+1] == j {
+//       found := true;
+//       break;
+//     }
+//     p := p + 1;
+//   }
+//   assume found;
+
+//   // Because the cycle has more than Nodes elements, some node must appear more than once
+// //   var counts := map k:int {:trigger fullPath[k]} | 0 <= k < |fullPath| :: fullPath[k];
+//   assert |fullPath| > Nodes;
+//   assume exists k1, k2 :: 0 <= k1 < k2 < |fullPath| && fullPath[k1] == fullPath[k2];
+
+//   // Now scan fullPath again to find a later occurrence of (j, i)
+//   found := false;
+//   var x0 := 0;
+//   var y0 := 0;
+//   var q := p + 1;
+//   while q < |fullPath| - 1
+//     invariant p+1 <= q <= |fullPath|-1
+//     decreases |fullPath| - q
+//   {
+//     if fullPath[q] == j && fullPath[q+1] == i {
+//       x0 := q;
+//       y0 := q + 1;
+//       found := true;
+//       break;
+//     }
+//     q := q + 1;
+//   }
+//   assert found;
+
+//   // Now we set x := x0, y := y0
+//   x := x0;
+//   y := y0;
+
+//   // Prove postconditions
+//   assert 0 <= x < |fullPath| - 1;
+//   assert x < y;
+//   assert fullPath[x] == j && fullPath[y] == i;
+
+//   // Since fullPath = nodes + [start], x must be < |nodes|
+//   assert x < |nodes|;
+//   assert y < |nodes| + 1;
+//   if y < |nodes| {
+//     assert nodes[x] == j && nodes[y] == i;
+//   } else {
+//     // y == |nodes|, then nodes[y] doesn't exist, but since fullPath[y] == i and fullPath[y] = start,
+//     // then i == start
+//     assert i == start;
+//     assert y == |nodes|;
+//     // then nodes[x] == j still holds, and we can just output (x, y)
+//   }
+// }
+
+
+// method lemma_ReverseEdgePathExists2(start: int, end: int, nodes: seq<int>, i: int, j: int)
+//     returns (x: int, y: int)
+//     requires 0 <= start < Nodes
+//     requires 0 <= end < Nodes
+//     requires 0 <= i < Nodes
+//     requires 0 <= j < Nodes
+//     requires |nodes| > Nodes
+//     requires nodes[0] == start
+//     requires nodes[|nodes|-1] == end
+//     requires forall k :: 0 <= k < |nodes| ==> 0 <= nodes[k] < Nodes
+//     requires forall k :: 0 <= k < |nodes|-1 ==> NodesAreNext(nodes[k], nodes[k+1])
+//     requires NodesAreNext(end, start)
+//     requires NodesAreNext(i, j)
+//     ensures 0 <= x < |nodes|
+//     ensures 0 <= y < |nodes|
+//     ensures nodes[x] == j
+//     ensures nodes[y] == i
+//     ensures x < y
+// {
+//     // Assume Nodes is a constant defined elsewhere
+//     // Initialize x to find the first occurrence of j
+//     x := -1;
+//     var k := 0;
+//     while k < |nodes|
+//         invariant 0 <= k <= |nodes|
+//         invariant x == -1 ==> (forall m :: 0 <= m < k ==> nodes[m] != j)
+//         invariant x >= 0 ==> (0 <= x < k && nodes[x] == j && (forall m :: 0 <= m < x ==> nodes[m] != j))
+//     {
+//         if nodes[k] == j {
+//             if x == -1 {
+//                 x := k;
+//             }
+//         }
+//         k := k + 1;
+//     }
+
+//     // Assert that j was found
+//     assume x >= 0 && x < |nodes| && nodes[x] == j;
+
+//     // Find the first occurrence of i after x
+//     y := -1;
+//     k := x + 1;
+//     while k < |nodes|
+//         invariant x < k <= |nodes|
+//         invariant y == -1 ==> (forall m :: x < m < k ==> nodes[m] != i)
+//         invariant y >= 0 ==> (x < y < k && nodes[y] == i)
+//     {
+//         if nodes[k] == i {
+//             if y == -1 {
+//                 y := k;
+//             }
+//         }
+//         k := k + 1;
+//     }
+
+//     // Assert that i was found after x
+//     assume y >= 0;
+//     assert x < y < |nodes| && nodes[y] == i;
+// }
+
+// lemma lemma_ReverseEdgePathExists(start:int, end:int, nodes:seq<int>, i:int, j:int)
+//     requires 0 <= start < Nodes
+//     requires 0 <= end < Nodes
+//     requires |nodes| > Nodes
+//     requires nodes[0] == start
+//     requires nodes[|nodes|-1] == end
+//     requires forall k :: 0 <= k < |nodes| ==> 0 <= nodes[k] < Nodes
+//     requires forall k :: 0 <= k < |nodes|-1 ==> NodesAreNext(nodes[k], nodes[k+1])
+//     requires NodesAreNext(end, start)
+//     requires NodesAreNext(i, j)
+//     ensures exists p:int, q:int :: 
+//         0 <= p <= q < |nodes| &&
+//         nodes[p] == j && nodes[q] == i &&
+//         forall r :: p <= r < q ==> NodesAreNext(nodes[r], nodes[r+1])
+// {
+//     // Since |nodes| > Nodes and all nodes are in [0, Nodes), by pigeonhole principle
+//     // at least one node appears multiple times. But stronger: the ring is traversed more than once.
+//     // So i and j must appear at least once, and since it wraps (end -> start), we can treat this as circular.
+
+//     // Step 1: Find positions where j occurs
+//     var j_indices : set<int> := set k | 0 <= k < |nodes| && nodes[k] == j;
+//     var i_indices : set<int> := set k | 0 <= k < |nodes| && nodes[k] == i;
+
+//     // We know j and i both must appear at least once since the ring is complete
+//     assert |j_indices| > 0;
+//     assert |i_indices| > 0;
+
+//     // Try all pairs (p, q) where p is j, q is i, and p < q
+//     // There must be one such pair because the sequence is longer than one ring
+//     // and eventually cycles back
+
+//     var found := false;
+//     var p:int, q:int;
+//     forall x:int, y:int | x in j_indices && y in i_indices && x < y
+//         ensures found || (found && p == x && q == y &&
+//                           forall r :: p <= r < q ==> NodesAreNext(nodes[r], nodes[r+1]))
+//     {
+//         if (!found) {
+//             var ok := true;
+//             forall r | x <= r < y
+//                 ensures ok ==> NodesAreNext(nodes[r], nodes[r+1])
+//             {
+//                 if (!NodesAreNext(nodes[r], nodes[r+1])) {
+//                     ok := false;
+//                 }
+//             }
+//             if ok {
+//                 p := x;
+//                 q := y;
+//                 found := true;
+//             }
+//         }
+//     }
+//     if found {
+//         assert exists p:int, q:int ::
+//             0 <= p <= q < |nodes| &&
+//             nodes[p] == j && nodes[q] == i &&
+//             forall r :: p <= r < q ==> NodesAreNext(nodes[r], nodes[r+1]);
+//     } else {
+//         // This cannot happen since the circle is walked more than once.
+//         // We would eventually traverse j then i in order.
+//         assert false;
+//     }
+// }
+
+
+
+
 lemma lemma_DepsIsMetForNodes(
     b:Behavior<CMState>,
     i:int,

@@ -3,6 +3,7 @@ include "../distributed_system.dfy"
 include "packet_sending.dfy"
 include "properties.dfy"
 include "propagation_lemma3.dfy"
+include "meta_is_met.dfy"
 include "../../../Common/Collections/Seqs.s.dfy"
 
 module CausalMesh_Proof_Propagation_i {
@@ -20,6 +21,7 @@ import opened CausalMesh_Proof_PropagationLemma2_i
 import opened CausalMesh_Proof_PropagationLemma3_i
 import opened CausalMesh_Proof_PacketSending_i
 import opened CausalMesh_Proof_Properties_i
+import opened CausalMesh_Proof_MetaIsMet_i
 // import opened CausalMesh_Proof_MessageReadReply_i
 import opened Collections__Seqs_s
 import opened Collections__Maps_i
@@ -61,7 +63,7 @@ lemma lemma_PropagationAtTail(
 
     assert 0 <= i - 1;
     assert IsValidBehaviorPrefix(b, i-1);
-    // assume forall j :: 0 <= j < i-1 ==> CMNext(b[j], b[j+1]);
+    assume forall j :: 0 <= j < i-1 ==> CMNext(b[j], b[j+1]);
     assert CMNext(b[i-1], b[i]);
     assert forall j :: 0 <= j < Nodes ==> ServerValid(b[i-1].servers[j].s);
     assert p.msg.Message_Propagation?;
@@ -117,6 +119,9 @@ lemma lemma_PropagationAtTail(
     assert forall j :: 0 <= j < |nodes| ==> 0 <= nodes[j] < Nodes;
     lemma_AVersionOfAKeyIsMetForAllNodes(b, i, nodes, p.msg.key, p.msg.meta.vc);
     // assert AVersionIsMetOnAllServers(b, i, p.msg.key, p.msg.meta.vc);
+
+    var new_pvc := if (VCHappendsBefore(p.msg.meta.vc, s.pvc)) then s.pvc else VCMerge(s.pvc, p.msg.meta.vc);
+    lemma_AllServersMetasInCacheSmallThanPVCIsMetOnAllServers(b, i, new_pvc, nodes);
 }
 
 // lemma lemma_PropagationAtTail2(

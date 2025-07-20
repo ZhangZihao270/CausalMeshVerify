@@ -293,8 +293,8 @@ lemma lemma_MetaIsMetImpliesMetasBeforeItAreMet3(
     requires 0 <= idx < Nodes
     
     requires VectorClockValid(vc)
-    requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
-    requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
+    // requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
+    // requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
     requires forall m :: m in metas ==> MetaValid(m) && (VCHappendsBefore(m.vc, vc) || VCEq(m.vc, vc))
     // requires forall m :: m in metas ==> AVersionOfAKeyIsMet(b[i].servers[idx].s.icache, b[i].servers[idx].s.ccache, m.key, m.vc)
     ensures forall m :: m in metas ==> AVersionIsMetOnAllServers(b, i, m.key, m.vc)
@@ -313,7 +313,7 @@ lemma lemma_MetaIsMetImpliesMetasBeforeItAreMet3(
         assert IsValidBehaviorPrefix(b, i);
         assert MetaValid(m);
         assert AVersionIsMetOnAllServers(b, i, m.key, m.vc);
-        assert forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j);
+        // assert forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j);
 
         forall k | k in m.deps 
             ensures AVersionIsMetOnAllServers(b, i, k, m.deps[k])
@@ -356,8 +356,8 @@ function {:opaque} GetMetasOfAllDepsGlobalView3(
     requires forall k :: k in Keys_domain ==> k in icache // should we have this?
     requires forall k :: k in deps ==> k in domain && (VCHappendsBefore(deps[k], vc) || VCEq(deps[k], vc))
 
-    requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
-    requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
+    // requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
+    // requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
 
     requires AllVersionsInDepsAreMetOnAllServers(b, i, deps)
     requires forall k :: k in todos ==> AVersionIsMetOnAllServers(b, i, k, todos[k].vc) && AllVersionsInDepsAreMetOnAllServers(b, i, todos[k].deps)
@@ -451,8 +451,8 @@ lemma lemma_VersionsAfterPullDepsAreMetOnAllServers2(
     requires 0 <= idx < Nodes
     requires DependencyValid(deps)
     requires VectorClockValid(vc)
-    requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
-    requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
+    // requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
+    // requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
     requires forall k :: k in deps ==> VCHappendsBefore(deps[k], vc) || VCEq(deps[k], vc)
     requires AllVersionsInDepsAreMetOnAllServers(b, i, deps)
     requires AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[idx].s.ccache)
@@ -1091,8 +1091,8 @@ lemma {:axiom} lemma_GetMetasOfAllDepsGlobalViewEqualsToGetMetasOfAllDeps3
                         VCHappendsBefore(todos[k].deps[kk], todos[k].vc) || VCEq(todos[k].deps[kk], todos[k].vc)
     requires CausalCut(todos)
 
-    requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
-    requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
+    // requires forall j :: 0 < j <= i ==> AllWriteDepsAreMet(b, j)
+    // requires forall j :: 0 <= j < i ==> ServerNextDoesNotDecreaseVersions(b[j], b[j+1])
     requires AllVersionsInDepsAreMetOnAllServers(b, i, deps)
     requires forall k :: k in todos ==> AVersionIsMetOnAllServers(b, i, k, todos[k].vc) && AllVersionsInDepsAreMetOnAllServers(b, i, todos[k].deps)
     ensures 

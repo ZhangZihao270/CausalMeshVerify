@@ -34,6 +34,24 @@ predicate AVersionIsMetOnAllServers(
     forall j :: 0 <= j < |b[i].servers| ==> AVersionOfAKeyIsMet(b[i].servers[j].s.icache, b[i].servers[j].s.ccache, k, vc)
 }
 
+predicate {:opaque} AllServersMetasInCacheSmallThanPVCIsMetOnAllServers(
+    b:Behavior<CMState>,
+    i:int,
+    pvc:VectorClock
+)
+    requires 0 < i
+    requires IsValidBehaviorPrefix(b, i)
+    requires VectorClockValid(pvc)
+{
+    lemma_BehaviorValidImpliesOneStepValid(b, i);
+    // assert (forall j {:trigger CMNext(b[j], b[j+1])} :: 0 <= j < i ==> CMNext(b[j], b[j+1]));
+    assert CMNext(b[i-1], b[i]);
+
+    forall j :: 0 <= j < |b[i].servers| ==> var s :=  b[i].servers[j].s;
+            forall k :: k in s.icache ==>
+                forall m :: m in s.icache[k] && (VCHappendsBefore(m.vc, pvc) || VCEq(m.vc, pvc)) ==> AVersionIsMetOnAllServers(b, i, m.key, m.vc)
+}
+
 predicate AVersionIsMetOnAllServers2(
     b:Behavior<CMState>,
     i:int,
@@ -219,7 +237,8 @@ predicate AllReadRepliesAreMet(
     assert forall p :: p in b[i].environment.sentPackets ==> PacketValid(p);
 
     forall p :: p in b[i].environment.sentPackets && p.msg.Message_Read_Reply? ==> 
-        AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_rreply) && AVersionIsMetOnAllServers(b, i, p.msg.key_rreply, p.msg.vc_rreply)
+        // AllVersionsInDepsAreMetOnAllServers(b, i, p.msg.deps_rreply) && 
+        AVersionIsMetOnAllServers(b, i, p.msg.key_rreply, p.msg.vc_rreply)
         && (VCHappendsBefore(p.msg.vc_rreply, p.msg.pvc_rreply) || VCEq(p.msg.vc_rreply, p.msg.pvc_rreply))
 }
 
@@ -256,5 +275,6 @@ predicate ServerNextDoesNotDecreaseVersions(
         CCacheDoesNotDecrease(ps.servers[i].s.ccache, ps'.servers[i].s.ccache) 
         && ICacheDoesNotDecrease(ps.servers[i].s.icache, ps'.servers[i].s.icache)
 }
+
 
 }

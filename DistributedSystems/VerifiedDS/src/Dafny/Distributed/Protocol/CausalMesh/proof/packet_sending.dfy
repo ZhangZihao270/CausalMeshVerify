@@ -223,4 +223,48 @@ lemma lemma_ActionThatSendsPropagationIsReceivePropogateOrReceiveWrite(
         assert false;
     }
 }
+
+lemma lemma_ActionThatInsertMetaIntoLocalIsProcessWriteReply(
+    ps:CMState,
+    ps':CMState,
+    idx:int,
+    k:Key,
+    meta:Meta
+)
+returns(
+    ios:seq<CMIo>
+)
+    requires 0 <= idx < Clients
+    requires CMNext(ps, ps')
+    requires k in ps'.clients[idx].c.local && meta == ps'.clients[idx].c.local[k]
+    requires k !in ps.clients[idx].c.local || (k in ps.clients[idx].c.local && meta != ps.clients[idx].c.local[k])
+    ensures CMNextClient(ps, ps', idx, ios)
+    ensures |ios| > 0
+    ensures ios[0].LIoOpReceive?
+    ensures ios[0].r.msg.Message_Write_Reply?
+    ensures ReceiveWriteReply(ps.clients[idx].c, ps'.clients[idx].c, ios[0].r, ExtractSentPacketsFromIos(ios))
+{
+    ios :| CMNextClient(ps, ps', idx, ios);
+
+    var s := ps.clients[idx];
+    var s' := ps'.clients[idx];
+
+    assert LClientNext(s, s', ios);
+
+    assert |ios| >= 1;
+    assert !ios[0].LIoOpTimeoutReceive?;
+    assert ios[0].LIoOpReceive?;
+    assert PacketValid(ios[0].r);
+
+    var p := ios[0].r;
+    var sp := ExtractSentPacketsFromIos(ios);
+
+    assert p.msg.Message_Write_Reply?;
+}
+
+// lemma lemma_FindTheStartServerOfPropagation(
+//     b:Behavior<CMState>,
+//     i:int,
+
+// )
 }

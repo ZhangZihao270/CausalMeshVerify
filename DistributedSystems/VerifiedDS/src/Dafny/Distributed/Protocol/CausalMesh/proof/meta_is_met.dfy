@@ -2,10 +2,12 @@ include "../distributed_system.dfy"
 // include "causalcut.dfy"
 include "packet_sending.dfy"
 include "properties.dfy"
-include "propagation.dfy"
+// include "propagation.dfy"
 include "propagation_lemma3.dfy"
 include "always_met.dfy"
 include "../../../Common/Collections/Seqs.s.dfy"
+include "message_propagation.dfy"
+include "message_write.dfy"
 
 module CausalMesh_Proof_MetaIsMet_i {
 import opened CausalMesh_Cache_i
@@ -18,12 +20,14 @@ import opened CausalMesh_Proof_Actions_i
 import opened Temporal__Temporal_s
 import opened CausalMesh_proof_Assumptions_i
 import opened CausalMesh_Proof_Constants_i
-import opened CausalMesh_Proof_PropagationLemma_i
+// import opened CausalMesh_Proof_PropagationLemma_i
 import opened CausalMesh_Proof_PropagationLemma3_i
-import opened CausalMesh_Proof_Propagation_i
+// import opened CausalMesh_Proof_Propagation_i
 import opened CausalMesh_Proof_PacketSending_i
 import opened CausalMesh_Proof_Properties_i
 import opened CausalMesh_Proof_AllwaysMet_i
+import opened CausalMesh_Proof_MessagePropagation_i
+import opened CausalMesh_Proof_MessageWrite_i
 // import opened CausalMesh_Proof_MessageReadReply_i
 import opened Collections__Seqs_s
 import opened Collections__Maps_i
@@ -302,6 +306,289 @@ lemma lemma_AVersionIsPropagatedImpliesAllPreviousDepsAreMet(
         assert AVersionIsMetOnAllServers(b, i, k, deps[k]);
     }
 }
+
+// lemma lemma_AVersionOnServerImpliesPropogateInEnvironment(
+//     b:Behavior<CMState>,
+//     i:int,
+// )
+
+// lemma lemma_ActionThatInsertMeteIntoICache(
+//     ps:CMState,
+//     ps':CMState,
+//     idx:int,
+//     k:Key,
+//     meta:Meta
+// ) 
+// returns (
+//     start:int
+// )
+//     requires CMNext(ps, ps')
+//     requires 0 <= idx < Nodes
+//     requires k in ps.servers[idx].s.icache && k in ps'.servers[idx].s.icache
+//     requires meta !in ps.servers[idx].s.icache[k]
+//     requires meta in ps'.servers[idx].s.icache[k]
+// {
+//     var s := ps.servers[idx];
+//     var s' := ps'.servers[idx];
+
+//     var ios:seq<CMIo> :| CMNextServer(ps, ps', idx, ios);
+
+//     assert CMNextServer(ps, ps', idx, ios);
+//     assert LServerNext(ps.servers[idx], ps'.servers[idx], ios);
+
+//     assert |ios| >= 1;
+//     assert !ios[0].LIoOpTimeoutReceive?;
+//     assert ios[0].LIoOpReceive?;
+//     assert PacketValid(ios[0].r);
+
+//     var p := ios[0].r;
+//     var sp := ExtractSentPacketsFromIos(ios);
+
+//     assert p.msg.Message_Propagation? || p.msg.Message_Write?;
+
+//     if p.msg.Message_Write? {
+//         return idx;
+//     } else {
+//         assert p.msg.Message_Propagation?;
+//         // var j, p_write := lemma_PropagationHasInitialWriteMessage(b, i, p);
+//         return idx;
+//     }
+// }
+
+
+lemma lemma_AllServersMetasInCacheSmallThanPVCIsMetOnAllServers(
+    b:Behavior<CMState>,
+    i:int,
+    pvc:VectorClock,
+    nodes:seq<int>
+)
+    requires IsValidBehaviorPrefix(b, i)
+    requires 0 < i
+    // requires 0 <= idx < Nodes
+    requires CMNext(b[i-1], b[i])
+    requires VectorClockValid(pvc)
+    requires NodesAreComplete(nodes)
+    ensures AllServersMetasInCacheSmallThanPVCIsMetOnAllServers(b, i, pvc)
+{
+    forall j | 0 <= j < |b[i].servers|
+        ensures var s :=  b[i].servers[j].s;
+                forall k :: k in s.icache ==>
+                forall m :: m in s.icache[k] && (VCHappendsBefore(m.vc, pvc) || VCEq(m.vc, pvc)) ==> AVersionIsMetOnAllServers(b, i, m.key, m.vc)
+    {
+        lemma_AllMetasInICacheSmallThanPVCIsMetOnAllServers(b, i, j, pvc, nodes);
+        var s :=  b[i].servers[j].s;
+        assert forall k :: k in s.icache ==>
+                forall m :: m in s.icache[k] && (VCHappendsBefore(m.vc, pvc) || VCEq(m.vc, pvc)) ==> AVersionIsMetOnAllServers(b, i, m.key, m.vc);
+    }
+    reveal_AllServersMetasInCacheSmallThanPVCIsMetOnAllServers();
+    assert AllServersMetasInCacheSmallThanPVCIsMetOnAllServers(b, i, pvc);
+}
+
+lemma lemma_AllMetasInICacheSmallThanPVCIsMetOnAllServers(
+    b:Behavior<CMState>,
+    i:int,
+    idx:int,
+    pvc:VectorClock,
+    nodes:seq<int>
+)
+    requires IsValidBehaviorPrefix(b, i)
+    requires 0 < i
+    requires 0 <= idx < Nodes
+    requires CMNext(b[i-1], b[i])
+    // requires ServerValid(b[i].servers[idx].s)
+    requires VectorClockValid(pvc)
+    // requires |nodes| > 1
+    // requires forall j :: 0 <= j < |nodes| ==> 0 <= nodes[j] < Nodes
+    requires NodesAreComplete(nodes)
+    ensures var s := b[i].servers[idx].s;
+            forall k :: k in s.icache ==>
+                forall m :: m in s.icache[k] && (VCHappendsBefore(m.vc, pvc) || VCEq(m.vc, pvc)) ==> AVersionIsMetOnAllServers(b, i, m.key, m.vc)
+{
+    lemma_BehaviorValidImpliesOneStepValid(b, i);
+    var s := b[i].servers[idx].s;
+    forall k | k in s.icache 
+        ensures forall m :: m in s.icache[k] && (VCHappendsBefore(m.vc, pvc) || VCEq(m.vc, pvc)) ==> AVersionIsMetOnAllServers(b, i, m.key, m.vc)
+    {
+        forall m | m in s.icache[k]
+            ensures (VCHappendsBefore(m.vc, pvc) || VCEq(m.vc, pvc)) ==> AVersionIsMetOnAllServers(b, i, m.key, m.vc)
+        {
+            if m != EmptyMeta(m.key) && (VCHappendsBefore(m.vc, pvc) || VCEq(m.vc, pvc)){
+                var j, start := lemma_FindTheSourceOfMetaInICache(b, i-1, idx, k, m);
+                assert j < i;
+                assert 0 <= start < Nodes;
+                reveal_NodesAreComplete();
+                assert start in nodes;
+                lemma_AVersionIsPropagatedImpliesAllPreviousVersionsAreMet(b, i, pvc, m.key, m.vc);
+            } else if (m == EmptyMeta(m.key)) {
+                assert AVersionIsMetOnAllServers(b, i, m.key, m.vc);
+                assert (VCHappendsBefore(m.vc, pvc) || VCEq(m.vc, pvc));
+            }
+        }
+    }
+    assert forall k :: k in s.icache ==>
+            forall m :: m in s.icache[k] && (VCHappendsBefore(m.vc, pvc) || VCEq(m.vc, pvc)) ==> AVersionIsMetOnAllServers(b, i, m.key, m.vc);
+}
+
+
+lemma lemma_FindTheSourceOfMetaInICache(
+    b:Behavior<CMState>,
+    i:int,
+    idx:int,
+    k:Key,
+    meta:Meta
+) 
+returns (
+    j:int,
+    start:int
+)
+    requires IsValidBehaviorPrefix(b, i+1)
+    requires 0 <= i
+    requires CMNext(b[i], b[i+1])
+    requires 0 <= idx < Nodes
+    requires k in Keys_domain
+    requires meta.key == k
+    requires k in b[i+1].servers[idx].s.icache
+    requires k in b[i].servers[idx].s.icache
+    requires meta != EmptyMeta(meta.key);
+    requires meta in b[i+1].servers[idx].s.icache[k]
+    ensures 0 <= start < Nodes
+    ensures j <= i
+{
+    if i == 0 {
+        assert b[i+1].servers[idx].s.icache == InitICache();
+        assert meta != EmptyMeta(meta.key);
+        assert meta !in InitICache()[k];
+        assert meta !in b[i+1].servers[idx].s.icache[k];
+        assert false;
+        return;
+    }
+
+    if meta in b[i].servers[idx].s.icache[k]
+    {
+        lemma_BehaviorValidImpliesOneStepValid(b, i);
+        
+        assert CMNext(b[i-1], b[i]);
+        assert ServerValid(b[i-1].servers[idx].s);
+        assert ServerValid(b[i].servers[idx].s);
+        assert k in b[i].servers[idx].s.icache;
+        assert k in b[i-1].servers[idx].s.icache;
+        
+        j, start :=
+        lemma_FindTheSourceOfMetaInICache(b, i-1, idx, k, meta);
+        return;
+    }
+
+    // lemma_AssumptionsMakeValidTransition(b, i-1);
+    // lemma_ConstantsAllConsistent(b, i);
+    // lemma_ConstantsAllConsistent(b, i-1);
+
+    assert IsValidBehaviorPrefix(b, i+1);
+    assert 0 <= i;
+    assert CMNext(b[i], b[i+1]);
+    assert 0 <= idx < Nodes;
+    assert k in b[i].servers[idx].s.icache && k in b[i+1].servers[idx].s.icache;
+    assert meta !in b[i].servers[idx].s.icache[k];
+    assert meta in b[i+1].servers[idx].s.icache[k];
+
+    j, start := lemma_FindTheSourceOfAInsertedMeta(b, i, idx, k, meta);
+}
+
+lemma lemma_FindTheSourceOfAInsertedMeta(
+    b:Behavior<CMState>,
+    i:int,
+    idx:int,
+    k:Key,
+    meta:Meta
+) 
+returns (
+    j:int,
+    start:int
+)
+    requires IsValidBehaviorPrefix(b, i+1)
+    requires 0 <= i
+    requires CMNext(b[i], b[i+1])
+    requires 0 <= idx < Nodes
+    requires k in b[i].servers[idx].s.icache && k in b[i+1].servers[idx].s.icache
+    requires meta !in b[i].servers[idx].s.icache[k]
+    requires meta in b[i+1].servers[idx].s.icache[k]
+    ensures 0 <= start < Nodes
+    ensures j <= i
+{
+    var s := b[i].servers[idx];
+    var s' := b[i+1].servers[idx];
+
+    var ios:seq<CMIo> :| CMNextServer(b[i], b[i+1], idx, ios);
+
+    assert CMNextServer(b[i], b[i+1], idx, ios);
+    assert LServerNext(b[i].servers[idx], b[i+1].servers[idx], ios);
+
+    assert |ios| >= 1;
+    assert !ios[0].LIoOpTimeoutReceive?;
+    assert ios[0].LIoOpReceive?;
+    assert PacketValid(ios[0].r);
+
+    var p := ios[0].r;
+    var sp := ExtractSentPacketsFromIos(ios);
+
+    assert p.msg.Message_Propagation? || p.msg.Message_Write?;
+
+    if p.msg.Message_Write? {
+        
+        assert |sp| > 0;
+        var p_pro := sp[1];
+        assert ReceiveWrite(s.s, s'.s, p, sp);
+        assert p_pro.msg.Message_Propagation?;
+        assert p_pro.src == s.s.id;
+        reveal_ServerIdsAreMatch();
+        assert s.s.id == idx;
+        assert p_pro.src == idx;
+
+        if k == p.msg.key_write {
+            j := i;
+            start := idx;
+        } else {
+            var local_metas := set m | m in p.msg.local.Values;
+            lemma_MetaInMetas(meta, local_metas);
+            assume meta in local_metas;
+            assert meta.key == k;
+            assert forall k :: k in p.msg.local ==> p.msg.local[k].key == k;
+            assert k in p.msg.local;
+            assert exists m :: m in local_metas && m.key == k;
+
+            // assert Nodes <= p.src < Nodes + Clients;
+            // assert p.msg.Message_Write?;
+            // assert p in b[i+1].environment.sentPackets;
+            // assume p !in b[i].environment.sentPackets;
+            var jj, client, ios1 := lemma_FindTheClientThatSentWriteContainsMeta(b, i, p, k, meta);
+            assert IsValidBehaviorPrefix(b, jj);
+            assert 0 <= jj-1;
+            lemma_BehaviorValidImpliesOneStepValid(b, jj);
+            assert CMNext(b[jj-1], b[jj]);
+            assert 0 <= client < Clients;
+            assert k in b[jj].clients[client].c.local;
+            assert meta == b[jj].clients[client].c.local[k];
+            var jjj, p_wreply := lemma_MetasInClientLocalHasCorrspondingWriteMessage(b, jj-1, client, k, meta);
+            j := jjj;
+            start := p_wreply.src;
+            assert jjj <= i;
+            assert 0 <= p_wreply.src < Nodes;
+        }
+        // assert k == p.msg.key_write;
+
+        // assert p_pro.msg.key == k;
+        // assert exists pp:Packet :: pp.msg.Message_Propagation? && pp.src == idx && pp in b[i+1].environment.sentPackets;
+    } else {
+        assert p.msg.Message_Propagation?;
+        var jj, p_write := lemma_PropagationHasInitialWriteMessage(b, i, p);
+        j := jj;
+        start := p_write.dst;
+    }
+}
+
+lemma {:axiom} lemma_MetaInMetas(meta:Meta, metas:set<Meta>)
+    ensures meta in metas
+
+
 
 lemma {:axiom} lemma_AVersionIsPropagatedImpliesAllPreviousVersionsAreMet(
     b:Behavior<CMState>,
