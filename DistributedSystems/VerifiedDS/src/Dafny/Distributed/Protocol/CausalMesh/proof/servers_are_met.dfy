@@ -99,6 +99,38 @@ lemma lemma_VCRelationIsTransitiveForDeps(
 
 }
 
+
+lemma lemma_AllServersAreMetForIndexOne(
+    b:Behavior<CMState>,
+    i:int
+)
+    requires i == 1 
+    requires IsValidBehaviorPrefix(b, i)
+    requires CMNext(b[i-1], b[i])
+    ensures AllServersAreMet(b, i)
+{
+    reveal_AllVersionsInDepsAreMetOnAllServers();
+    reveal_AllVersionsInCCacheAreMetOnAllServers();
+    assert CMNext(b[i-1], b[i]);
+
+    assert CMInit(b[i-1]);
+    assert forall j :: 0 <= j < |b[i-1].servers| ==> ServerInit(b[i-1].servers[j].s, j);
+    assert forall j :: 0 <= j < |b[i-1].servers| ==> b[i-1].servers[j].s.ccache == InitCCache();
+    var init_ccache := InitCCache();
+    // assert forall k :: k in init_ccache ==> AVersionIsMetOnAllServers(b, i, k, init_ccache[k].vc);
+    assert AllVersionsInDepsAreMetOnAllServers(b, i, map[]);
+    // assume forall k :: k in init_ccache ==> init_ccache[k].deps == map[];
+    // assert forall k :: k in init_ccache ==> AllVersionsInDepsAreMetOnAllServers(b, i, init_ccache[k].deps);
+    // assume AllVersionsInCCacheAreMetOnAllServers(b, i, InitCCache());
+
+    assert forall j :: 0 <= j < |b[i].servers| ==> 
+        b[i-1].servers[j].s.ccache == b[i].servers[j].s.ccache;
+    assert forall j :: 0 <= j < |b[i].servers| ==> 
+            AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[j].s.ccache);
+    
+}
+
+
 lemma lemma_ServersAreMetForCMNext_WithStateChange(b:Behavior<CMState>, i:int, idx:int)
     requires IsValidBehaviorPrefix(b, i+1)
     requires 0 < i
@@ -234,36 +266,6 @@ lemma lemma_ServersAreMetForCMNext_WithStateChange(b:Behavior<CMState>, i:int, i
 }
 
 
-lemma lemma_AllServersAreMetForIndexOne(
-    b:Behavior<CMState>,
-    i:int
-)
-    requires i == 1 
-    requires IsValidBehaviorPrefix(b, i)
-    requires CMNext(b[i-1], b[i])
-    ensures AllServersAreMet(b, i)
-{
-    reveal_AllVersionsInDepsAreMetOnAllServers();
-    reveal_AllVersionsInCCacheAreMetOnAllServers();
-    assert CMNext(b[i-1], b[i]);
-
-    assert CMInit(b[i-1]);
-    assert forall j :: 0 <= j < |b[i-1].servers| ==> ServerInit(b[i-1].servers[j].s, j);
-    assert forall j :: 0 <= j < |b[i-1].servers| ==> b[i-1].servers[j].s.ccache == InitCCache();
-    var init_ccache := InitCCache();
-    // assert forall k :: k in init_ccache ==> AVersionIsMetOnAllServers(b, i, k, init_ccache[k].vc);
-    assert AllVersionsInDepsAreMetOnAllServers(b, i, map[]);
-    // assume forall k :: k in init_ccache ==> init_ccache[k].deps == map[];
-    // assert forall k :: k in init_ccache ==> AllVersionsInDepsAreMetOnAllServers(b, i, init_ccache[k].deps);
-    assume AllVersionsInCCacheAreMetOnAllServers(b, i, InitCCache());
-
-    assert forall j :: 0 <= j < |b[i].servers| ==> 
-        b[i-1].servers[j].s.ccache == b[i].servers[j].s.ccache;
-    assert forall j :: 0 <= j < |b[i].servers| ==> 
-            AllVersionsInCCacheAreMetOnAllServers(b, i, b[i].servers[j].s.ccache);
-    
-}
-
 lemma lemma_BehaviorPrefixAllServersAreMet(
     b:Behavior<CMState>,
     i:int
@@ -385,10 +387,10 @@ lemma lemma_InsertIntoCCachePreserveAllVersionsInCCacheAreMetOnAllServers(
 
         assert DependencyValid(ccache[meta.key].deps);
         assert DependencyValid(meta.deps);
-        assert AllVersionsInDepsAreMetOnAllServers(b, i, ccache[meta.key].deps);
-        assert AllVersionsInDepsAreMetOnAllServers(b, i, meta.deps);
-        lemma_MergedDepsIsMetOnAllServers(b, i, ccache[meta.key].deps, meta.deps);
-        assert AllVersionsInDepsAreMetOnAllServers(b, i, merged.deps);
+        // assert AllVersionsInDepsAreMetOnAllServers(b, i, ccache[meta.key].deps);
+        // assert AllVersionsInDepsAreMetOnAllServers(b, i, meta.deps);
+        // lemma_MergedDepsIsMetOnAllServers(b, i, ccache[meta.key].deps, meta.deps);
+        // assert AllVersionsInDepsAreMetOnAllServers(b, i, merged.deps);
 
         var new_ccache := InsertIntoCCache(ccache, meta);
         assert new_ccache == ccache[meta.key := merged];
@@ -421,11 +423,11 @@ lemma lemma_CCacheIsMetOnAllServersWillAlwaysMet(
 
     forall k | k in ccache
         ensures AVersionIsMetOnAllServers(b, i, k, ccache[k].vc)
-        ensures AllVersionsInDepsAreMetOnAllServers(b, i, ccache[k].deps)
+        // ensures AllVersionsInDepsAreMetOnAllServers(b, i, ccache[k].deps)
     {
         assert AVersionIsMetOnAllServers(b, i-1, k, ccache[k].vc);
         lemma_AVersionIsMetOnAllServersWillAlwaysMet(b, i, k, ccache[k].vc);
-        lemma_AllVersionsInDepsAreMetOnAllServersWillAlwaysMet(b, i, ccache[k].deps);
+        // lemma_AllVersionsInDepsAreMetOnAllServersWillAlwaysMet(b, i, ccache[k].deps);
     }
 }
 

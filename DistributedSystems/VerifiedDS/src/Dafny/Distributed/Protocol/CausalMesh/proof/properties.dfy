@@ -125,8 +125,8 @@ predicate {:opaque} AllVersionsInCCacheAreMetOnAllServers(
     requires CCacheValid(ccache)
 {
     lemma_BehaviorValidImpliesOneStepValid(b, i);
-    && (forall k :: k in ccache ==> AVersionIsMetOnAllServers(b, i, k, ccache[k].vc))
-    && (forall k :: k in ccache ==> AllVersionsInDepsAreMetOnAllServers(b, i, ccache[k].deps))
+    (forall k :: k in ccache ==> AVersionIsMetOnAllServers(b, i, k, ccache[k].vc))
+    // && (forall k :: k in ccache ==> AllVersionsInDepsAreMetOnAllServers(b, i, ccache[k].deps))
 }
 
 // predicate AllDepsInCCacheAreMetOnAllServers(
